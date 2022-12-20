@@ -9,3 +9,6 @@ To use Tubby, you need to have the following software installed on your computer
 * Python3
 * pytube
 * humanize
+
+## Installation
+
