@@ -12,4 +12,4 @@ To use Tubby, you need to have the following software installed on your computer
 
 ## Installation
 
-$ 'git clone https://github.com/kelivnjudha/tubby.git'
+$ git clone https://github.com/kelivnjudha/tubby.git
