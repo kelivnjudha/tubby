@@ -13,4 +13,7 @@ To use Tubby, you need to have the following software installed on your computer
 ## Installation
 ```
 $ git clone https://github.com/kelivnjudha/tubby.git
+$ cd tubby
+$ pip install -r requirements.txt
+$ python3 main.py
 ```
