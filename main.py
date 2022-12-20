@@ -61,8 +61,18 @@ def video():
 				if name_check.startswith('y'):
 					rename = input("Rename your video > ")
 					stream_D.download(output_path = path, filename = rename)
+					sec_check = input("Do you want to Download another one? (y/n) > ").lower()
+					if sec_check.startswith('y'):
+						menu()
+					else:
+						quit()
 				else:	
 					stream_D.download(output_path = path, filename = name)
+					sec_check = input("Do you want to Download another one? (y/n) > ").lower()
+					if sec_check.startswith('y'):
+						menu()
+					else:
+						quit()
 			else:
 				menu()
 		else:
