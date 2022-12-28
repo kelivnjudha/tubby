@@ -28,7 +28,7 @@ def video():
 	except Exception as e:
 		print("Connection Error!", e)
 		return menu()
-	video_stream = yt.streams.filter(only_video=True)
+	video_stream = yt.streams.filter(only_video=False, only_audio=False, mime_type='video/mp4')
 
 	if not video_stream:
 		print("No video streams available for this URL")
@@ -90,7 +90,7 @@ def audio():
 		print("Connection Error!", e)
 		return menu()
 
-	audio_streams = yt.streams.filter(only_audio = True)
+	audio_streams = yt.streams.filter(only_audio = True, mime_type='audio/mp3')
 
 	if not audio_streams:
 		print("No video streams available for this URL")
