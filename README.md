@@ -10,7 +10,11 @@ To use Tubby, you need to have the following software installed on your computer
 * pytube
 * humanize
 
-## Installation
+## Download
+
+Download from [releases](https://github.com/kelivnjudha/tubby/releases/tag/v0.1)
+
+## Install from source
 ```
 $ git clone https://github.com/kelivnjudha/tubby.git
 $ cd tubby
