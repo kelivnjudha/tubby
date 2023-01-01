@@ -6,6 +6,8 @@ flag = False
 
 def menu():
 	usr = input("""
+		[tubby version(0.1)]
+ 
 		OPTIONS
 		---------
 		1. Download Video
