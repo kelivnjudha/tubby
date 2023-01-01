@@ -56,7 +56,7 @@ def video():
 
 			check = input("\nDo you wnat to Download? (y/n) > ").lower()
 			if check.startswith('y'):
-				path = input("\nEnter path to save video > ")
+				path = input("\nEnter path to save video (Optional) > ")
 				name_check = input("Do you want to rename your video? (y/n) > ").lower()
 				if name_check.startswith('y'):
 					rename = input("Rename your video > ")
@@ -117,7 +117,7 @@ def audio():
 			name = stream_D.default_filename
 			check = input("\nDo you want to Download? (y/n) > ").lower()
 			if check.startswith('y'):
-				path = input("\nEnter path to save audio > ")
+				path = input("\nEnter path to save audio (Optional) > ")
 				name_check = input("Do you want to rename your audio file? (y/n) > ").lower()
 				if name_check.startswith('y'):
 					rename = input("Rename your audio > ")
