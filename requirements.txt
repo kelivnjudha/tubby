@@ -1,2 +1,2 @@
-pytube==12.1.0
-humanize==4.4.0
+pytube == 12.1.2
+humanize == 4.6.0
