@@ -12,8 +12,8 @@ To use Tubby, you need to have the following software installed on your computer
 
 ## Requirements for Version 0.2
 
-*tkinter
-*customtkinter
+* tkinter
+* customtkinter
 
 ## Download version 0.2 (Still in development)
 
