@@ -10,6 +10,15 @@ To use Tubby, you need to have the following software installed on your computer
 * pytube
 * humanize
 
+## Requirements for Version 0.2
+
+* tkinter
+* customtkinter
+
+## Download version 0.2 (Still in development)
+
+Download from [releases](https://github.com/kelivnjudha/tubby/releases/tag/v0.2_demo)
+
 ## Download
 
 Download from [releases](https://github.com/kelivnjudha/tubby/releases/tag/v0.1)
