@@ -1,0 +1,5 @@
+kivy
+kivy-garden
+pytube
+humanize
+moviepy
