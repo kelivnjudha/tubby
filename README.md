@@ -32,4 +32,17 @@ Download from [releases](https://github.com/kelivnjudha/tubby/releases/tag/v0.1)
 $ git clone https://github.com/kelivnjudha/tubby.git
 $ cd tubby
 $ pip install -r requirements.txt
-$ python3 main.py
+```
+## Version 0.1 installation from source
+
+```sh
+$ cd tubby-v-0.1
+$ python main.py
+```
+
+## Version 0.2 installation from source
+
+```sh
+$ cd version0.2
+$ python tubby.py
+```
