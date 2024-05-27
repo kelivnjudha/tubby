@@ -46,3 +46,13 @@ $ python main.py
 $ cd version0.2
 $ python tubby.py
 ```
+
+## Tubby apk version Usage
+
+```sh
+$ git clone https://github.com/kelivnjudha/tubby.git
+$ cd tubby
+$ cd tubby.apk
+$ pip install -r requirements.txt
+$ python tubby.py
+```
