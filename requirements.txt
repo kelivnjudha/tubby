@@ -1,4 +1,1 @@
-pytube
-humanize
-customtkinter
-moviepy
+-e .

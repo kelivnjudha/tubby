@@ -116,6 +116,17 @@ dmypy.json
 .buildozer/
 bin/
 
+# Local tooling
+.ruff_cache/
+
+# Downloaded media
+*.mp3
+*.mp4
+*.m4a
+*.webm
+*.part
+*.ytdl
+
 # OS generated files
 .DS_Store
 Thumbs.db

@@ -1,25 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
-block_cipher = None
-
-
 a = Analysis(
-    ['tubby.py'],
+    ['tubby/gui.py'],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=['yt_dlp'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
+    excludes=['kivy', 'moviepy', 'pytube'],
     noarchive=False,
 )
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,
@@ -28,7 +22,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='tubby',
+    name='Tubby',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

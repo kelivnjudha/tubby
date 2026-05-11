@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tubby-downloader"
+version = "0.3.0"
+description = "A lightweight desktop and CLI YouTube downloader."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE.txt" }
+authors = [{ name = "Kelvin" }]
+dependencies = [
+    "customtkinter>=5.2.2",
+    "yt-dlp>=2024.12.13",
+]
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.11"]
+
+[project.scripts]
+tubby = "tubby.cli:main"
+tubby-gui = "tubby.gui:main"
+
+[tool.setuptools.packages.find]
+include = ["tubby*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
