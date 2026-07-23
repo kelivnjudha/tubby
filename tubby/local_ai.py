@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from tubby.ollama_models import DEFAULT_MODEL, DEFAULT_OLLAMA_URL
 from tubby.report_styles import DEFAULT_REPORT_STYLE, get_report_style
 from tubby.transcript import VideoTranscript
 
-DEFAULT_MODEL = os.environ.get("TUBBY_OLLAMA_MODEL", "gemma4")
-DEFAULT_OLLAMA_URL = os.environ.get("TUBBY_OLLAMA_URL", "http://127.0.0.1:11434")
 ProgressCallback = Callable[[str], None]
 
 _MAX_CHUNK_CHARACTERS = 24_000

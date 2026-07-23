@@ -12,6 +12,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $venvPath = Join-Path $projectRoot ".venv"
 $venvPython = Join-Path $venvPath "Scripts\python.exe"
+$modelWasExplicit = $PSBoundParameters.ContainsKey("Model")
 
 if ([string]::IsNullOrWhiteSpace($Model)) {
     throw "Model cannot be empty."
@@ -136,12 +137,45 @@ try {
         }
     }
 
-    if (-not $SkipModelPull) {
+    Write-Step "Choosing an Ollama report model"
+    $chooserArguments = @(
+        "-m",
+        "tubby.ollama_models",
+        "choose-setup",
+        "--preferred",
+        $Model
+    )
+    if ($modelWasExplicit) {
+        $chooserArguments += "--explicit"
+    }
+    if ($SkipModelPull) {
+        $chooserArguments += "--no-install"
+    }
+
+    $selectionOutput = & $venvPython @chooserArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not choose an Ollama report model."
+    }
+    $selectionLine = [string](@($selectionOutput)[-1])
+    $selectionParts = $selectionLine -split "`t"
+    if ($selectionParts.Count -lt 2) {
+        throw "Tubby returned an invalid Ollama model selection."
+    }
+    $Model = $selectionParts[0]
+    $modelState = $selectionParts[1]
+    if ($modelState -notin @("installed", "missing")) {
+        throw "Tubby returned an unknown Ollama model state '$modelState'."
+    }
+
+    if ($modelState -eq "missing") {
         Write-Step "Downloading Ollama model $Model"
         & $ollamaExecutable pull $Model
         if ($LASTEXITCODE -ne 0) {
             throw "Ollama could not download model '$Model'."
         }
+    }
+    else {
+        Write-Step "Using installed Ollama model $Model"
     }
 
     if ($InstallFfmpeg -and -not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
@@ -162,6 +196,7 @@ try {
 
     Write-Host ""
     Write-Host "Tubby setup is complete." -ForegroundColor Green
+    Write-Host "Report model: $Model"
     Write-Host "Start the desktop app with:"
     Write-Host "  .\.venv\Scripts\python -m tubby"
     Write-Host ""

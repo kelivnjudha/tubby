@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tubby-downloader"
-version = "0.5.0"
-description = "Local media transcription and intelligence with Gemma 4, plus media downloading."
+version = "0.6.0"
+description = "Local media transcription and intelligence with Ollama, plus media downloading."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }

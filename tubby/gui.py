@@ -20,11 +20,22 @@ from tubby.downloader import (
     has_ffmpeg,
 )
 from tubby.languages import LANGUAGE_OPTIONS
-from tubby.local_ai import DEFAULT_MODEL, OllamaError
+from tubby.local_ai import OllamaError
 from tubby.media_transcript import (
     DEFAULT_WHISPER_MODEL,
     SUPPORTED_MEDIA_EXTENSIONS,
     WHISPER_MODEL_OPTIONS,
+)
+from tubby.ollama_models import (
+    DEFAULT_MODEL,
+    ModelLanguageSupport,
+    OllamaModel,
+    OllamaModelError,
+    choose_preferred_model,
+    list_installed_models,
+    ordered_report_models,
+    report_language_warning,
+    save_preferred_model,
 )
 from tubby.pdf_report import PdfReportError
 from tubby.report_styles import DEFAULT_REPORT_STYLE, REPORT_STYLE_OPTIONS
@@ -66,6 +77,7 @@ class TubbyApp(ctk.CTk):
         self.language_var = ctk.StringVar(value="English")
         self.report_style_var = ctk.StringVar(value=DEFAULT_REPORT_STYLE)
         self.model_var = ctk.StringVar(value=DEFAULT_MODEL)
+        self.model_status_var = ctk.StringVar(value="Loading installed Ollama models...")
         self.whisper_model_var = ctk.StringVar(value=DEFAULT_WHISPER_MODEL)
         self.report_output_var = ctk.StringVar(
             value=str(Path.home() / "Downloads" / "Tubby Reports")
@@ -75,6 +87,9 @@ class TubbyApp(ctk.CTk):
         self._worker: threading.Thread | None = None
         self._report_path: Path | None = None
         self._download_path: Path | None = None
+        self._ollama_models: dict[str, OllamaModel] = {}
+        self._model_refreshing = False
+        self._selected_model_installed = False
         self._mode_info = {
             DOWNLOADER_MODE: "Ready for a media URL.",
             INTELLIGENCE_MODE: "Ready for a YouTube link or local media file.",
@@ -87,6 +102,7 @@ class TubbyApp(ctk.CTk):
         self._build_content()
         self._build_activity_area()
         self._switch_mode(INTELLIGENCE_MODE)
+        self.after(150, self._refresh_ollama_models)
 
     def _build_header(self) -> None:
         header = ctk.CTkFrame(self, fg_color="transparent")
@@ -269,8 +285,25 @@ class TubbyApp(ctk.CTk):
         ctk.CTkLabel(frame, text="Ollama model").grid(
             row=3, column=0, padx=(16, 12), pady=8, sticky="w"
         )
-        self.model_entry = ctk.CTkEntry(frame, textvariable=self.model_var, width=190)
-        self.model_entry.grid(row=3, column=1, padx=(0, 16), pady=8, sticky="w")
+        model_controls = ctk.CTkFrame(frame, fg_color="transparent")
+        model_controls.grid(row=3, column=1, padx=(0, 16), pady=8, sticky="ew")
+        model_controls.grid_columnconfigure(0, weight=1)
+        self.model_menu = ctk.CTkOptionMenu(
+            model_controls,
+            values=[DEFAULT_MODEL],
+            variable=self.model_var,
+            command=self._model_changed,
+            width=160,
+            state="disabled",
+        )
+        self.model_menu.grid(row=0, column=0, sticky="ew")
+        self.refresh_models_button = ctk.CTkButton(
+            model_controls,
+            text="Refresh",
+            width=70,
+            command=self._refresh_ollama_models,
+        )
+        self.refresh_models_button.grid(row=0, column=1, padx=(8, 0))
 
         ctk.CTkLabel(frame, text="Speech model").grid(
             row=3, column=2, padx=(8, 12), pady=8, sticky="e"
@@ -284,12 +317,29 @@ class TubbyApp(ctk.CTk):
         )
         self.whisper_model_menu.grid(row=3, column=3, padx=(0, 16), pady=8, sticky="e")
 
+        self.model_status_label = ctk.CTkLabel(
+            frame,
+            textvariable=self.model_status_var,
+            anchor="w",
+            justify="left",
+            wraplength=720,
+            text_color=("#8A5A00", "#E8B44C"),
+        )
+        self.model_status_label.grid(
+            row=4,
+            column=0,
+            columnspan=4,
+            padx=16,
+            pady=(0, 4),
+            sticky="ew",
+        )
+
         ctk.CTkLabel(frame, text="Save folder").grid(
-            row=4, column=0, padx=(16, 12), pady=(8, 16), sticky="w"
+            row=5, column=0, padx=(16, 12), pady=(8, 16), sticky="w"
         )
         self.report_output_entry = ctk.CTkEntry(frame, textvariable=self.report_output_var)
         self.report_output_entry.grid(
-            row=4, column=1, columnspan=2, padx=(0, 8), pady=(8, 16), sticky="ew"
+            row=5, column=1, columnspan=2, padx=(0, 8), pady=(8, 16), sticky="ew"
         )
         self.report_browse_button = ctk.CTkButton(
             frame,
@@ -297,10 +347,10 @@ class TubbyApp(ctk.CTk):
             width=92,
             command=lambda: self._choose_directory(self.report_output_var),
         )
-        self.report_browse_button.grid(row=4, column=3, padx=(0, 16), pady=(8, 16), sticky="e")
+        self.report_browse_button.grid(row=5, column=3, padx=(0, 16), pady=(8, 16), sticky="e")
 
         actions = ctk.CTkFrame(frame, fg_color="transparent")
-        actions.grid(row=5, column=0, columnspan=4, padx=16, pady=(0, 16), sticky="ew")
+        actions.grid(row=6, column=0, columnspan=4, padx=16, pady=(0, 16), sticky="ew")
         self.analyze_button = ctk.CTkButton(
             actions,
             text="Create PDF",
@@ -376,6 +426,106 @@ class TubbyApp(ctk.CTk):
         values = AUDIO_QUALITY_OPTIONS if selected_mode == AUDIO_MODE else VIDEO_QUALITY_OPTIONS
         self.download_quality_menu.configure(values=list(values))
         self.download_quality_var.set("Best")
+
+    def _refresh_ollama_models(self) -> None:
+        if self._busy or self._model_refreshing:
+            return
+        self._model_refreshing = True
+        self.model_status_var.set("Loading installed Ollama models...")
+        self.model_status_label.configure(text_color=("gray35", "gray72"))
+        self.model_status_label.grid()
+        self.model_menu.configure(state="disabled")
+        self.refresh_models_button.configure(state="disabled")
+        self.analyze_button.configure(state="disabled")
+
+        def runner() -> None:
+            try:
+                models = list_installed_models()
+            except OllamaModelError as exc:
+                message = str(exc)
+                self.after(0, lambda message=message: self._model_refresh_failed(message))
+            except Exception as exc:
+                message = f"Could not load Ollama models: {exc}"
+                self.after(0, lambda message=message: self._model_refresh_failed(message))
+            else:
+                self.after(0, lambda models=models: self._models_loaded(models))
+
+        threading.Thread(target=runner, daemon=True).start()
+
+    def _models_loaded(self, models: tuple[OllamaModel, ...]) -> None:
+        self._model_refreshing = False
+        report_models = ordered_report_models(models)
+        self._ollama_models = {model.name: model for model in report_models}
+        self.refresh_models_button.configure(state="normal" if not self._busy else "disabled")
+
+        if not report_models:
+            self._selected_model_installed = False
+            self.model_menu.configure(values=[DEFAULT_MODEL], state="disabled")
+            self.model_var.set(DEFAULT_MODEL)
+            self._set_model_status(
+                "No installed Ollama model can generate reports. Install Gemma 4 and refresh.",
+                error=True,
+            )
+            self.analyze_button.configure(state="disabled")
+            return
+
+        selected = choose_preferred_model(report_models, self.model_var.get())
+        if selected is None:
+            return
+        self.model_menu.configure(
+            values=[model.name for model in report_models],
+            state="normal" if not self._busy else "disabled",
+        )
+        self.model_var.set(selected.name)
+        self._model_changed(selected.name)
+
+    def _model_refresh_failed(self, message: str) -> None:
+        self._model_refreshing = False
+        self._ollama_models = {}
+        self._selected_model_installed = False
+        self.model_menu.configure(state="disabled")
+        self.refresh_models_button.configure(state="normal" if not self._busy else "disabled")
+        self.analyze_button.configure(state="disabled")
+        self._set_model_status(message, error=True)
+
+    def _model_changed(self, selected_model: str) -> None:
+        model = self._ollama_models.get(selected_model)
+        self._selected_model_installed = model is not None
+        if model is None:
+            self.analyze_button.configure(state="disabled")
+            return
+
+        try:
+            save_preferred_model(model.name)
+        except OSError:
+            pass
+
+        support = model.language_support
+        if support == ModelLanguageSupport.ENGLISH_ONLY:
+            self.language_var.set("English")
+            self.language_menu.configure(values=["English"], state="disabled")
+        else:
+            self.language_menu.configure(
+                values=list(LANGUAGE_OPTIONS),
+                state="disabled" if self._busy else "normal",
+            )
+
+        warning = report_language_warning(model)
+        if warning:
+            self._set_model_status(warning)
+        else:
+            self.model_status_var.set("")
+            self.model_status_label.grid_remove()
+
+        self.analyze_button.configure(
+            state="normal" if self._selected_model_installed and not self._busy else "disabled"
+        )
+
+    def _set_model_status(self, message: str, error: bool = False) -> None:
+        color = ("#A02828", "#FF8A80") if error else ("#8A5A00", "#E8B44C")
+        self.model_status_var.set(message)
+        self.model_status_label.configure(text_color=color)
+        self.model_status_label.grid()
 
     def _choose_directory(self, variable: ctk.StringVar) -> None:
         initial = Path(variable.get()).expanduser()
@@ -500,7 +650,13 @@ class TubbyApp(ctk.CTk):
             messagebox.showerror("Tubby", "Enter a complete YouTube URL beginning with https://.")
             return
         if not model:
-            messagebox.showerror("Tubby", "Enter an Ollama model name.")
+            messagebox.showerror("Tubby", "Select an installed Ollama model.")
+            return
+        if not self._selected_model_installed or model not in self._ollama_models:
+            messagebox.showerror(
+                "Tubby",
+                "The selected Ollama model is not available. Start Ollama and refresh the list.",
+            )
             return
         if not output:
             messagebox.showerror("Tubby", "Choose a folder for the PDF report.")
@@ -604,7 +760,8 @@ class TubbyApp(ctk.CTk):
             self.source_entry,
             self.language_menu,
             self.report_style_menu,
-            self.model_entry,
+            self.model_menu,
+            self.refresh_models_button,
             self.report_output_entry,
             self.report_browse_button,
             self.analyze_button,
@@ -619,6 +776,13 @@ class TubbyApp(ctk.CTk):
             self.open_report_button.configure(state="disabled")
         else:
             self._source_changed(self.intelligence_source_var.get())
+            if self._ollama_models:
+                self._model_changed(self.model_var.get())
+            else:
+                self.analyze_button.configure(state="disabled")
+                self.refresh_models_button.configure(
+                    state="disabled" if self._model_refreshing else "normal"
+                )
             self.open_download_button.configure(
                 state="normal"
                 if self._download_path is not None and self._download_path.exists()

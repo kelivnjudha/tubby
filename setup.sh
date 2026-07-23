@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+MODEL_WAS_EXPLICIT=0
+if (($# >= 1)); then
+    MODEL_WAS_EXPLICIT=1
+fi
+
 MODEL="${1:-gemma4}"
 SPEECH_MODEL="${2:-small}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -183,9 +188,39 @@ if ! ollama_is_ready; then
     fail "Ollama did not start at $OLLAMA_URL. See ${TMPDIR:-/tmp}/tubby-ollama.log."
 fi
 
-step "Downloading Ollama model $MODEL"
-"$OLLAMA_BIN" pull "$MODEL"
+step "Choosing an Ollama report model"
+CHOOSER_ARGUMENTS=(
+    -m
+    tubby.ollama_models
+    choose-setup
+    --preferred
+    "$MODEL"
+)
+if ((MODEL_WAS_EXPLICIT)); then
+    CHOOSER_ARGUMENTS+=(--explicit)
+fi
+if [[ "${TUBBY_SKIP_MODEL_PULL:-0}" == "1" ]]; then
+    CHOOSER_ARGUMENTS+=(--no-install)
+fi
+
+SELECTION_OUTPUT="$("$VENV_PYTHON" "${CHOOSER_ARGUMENTS[@]}")" ||
+    fail "Could not choose an Ollama report model."
+IFS=$'\t' read -r MODEL MODEL_STATE MODEL_LANGUAGE_SUPPORT <<<"$SELECTION_OUTPUT"
+if [[ -z "$MODEL" || -z "$MODEL_STATE" ]]; then
+    fail "Tubby returned an invalid Ollama model selection."
+fi
+if [[ "$MODEL_STATE" != "installed" && "$MODEL_STATE" != "missing" ]]; then
+    fail "Tubby returned an unknown Ollama model state: $MODEL_STATE"
+fi
+
+if [[ "$MODEL_STATE" == "missing" ]]; then
+    step "Downloading Ollama model $MODEL"
+    "$OLLAMA_BIN" pull "$MODEL"
+else
+    step "Using installed Ollama model $MODEL"
+fi
 
 printf '\nTubby setup is complete.\n'
+printf 'Report model: %s\n' "$MODEL"
 printf 'Start the desktop app with:\n  ./.venv/bin/python -m tubby\n'
 printf 'The downloader CLI remains available with:\n  ./.venv/bin/tubby --help\n'
