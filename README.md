@@ -61,6 +61,43 @@ Performance depends on available RAM, GPU memory, media duration, and transcript
 Local speech-to-text defaults to CPU `int8` execution for consistent Windows, macOS, and
 Linux behavior.
 
+## Install A Release
+
+GitHub releases provide self-contained desktop installers. They include Tubby, Python, and
+its application dependencies; Python does not need to be installed separately.
+
+### Windows Release
+
+Download `Tubby-VERSION-Windows-x64-Setup.exe` from the
+[latest release](https://github.com/kelivnjudha/tubby/releases/latest). The per-user installer
+adds Tubby to the Start Menu, offers an optional desktop shortcut, and includes an uninstaller.
+The x64 build supports x64 Windows 10/11 and Windows 11 on Arm through x64 emulation.
+
+### macOS Release
+
+Download the DMG matching the Mac:
+
+- `Tubby-VERSION-macOS-arm64.dmg` for Apple silicon
+- `Tubby-VERSION-macOS-x64.dmg` for Intel
+
+Open the DMG and drag `Tubby` into `Applications`. Tubby requires macOS 14 Sonoma or newer.
+When a release is not signed and notarized, macOS may require Control-clicking Tubby,
+selecting `Open`, and confirming once. See [Release Signing](#release-signing) for producing
+notarized builds.
+
+The installers do not bundle Ollama, multi-gigabyte AI models, or FFmpeg. The downloader
+works without Ollama. FFmpeg is still required for MP3 conversion and high-resolution video
+with merged audio. Before creating transcript reports, install
+[Ollama](https://ollama.com/download), start it, and install a report model:
+
+```sh
+ollama pull qwen3:4b
+```
+
+The selected local Whisper speech model downloads on the first local audio or video
+transcription. Source checkouts can use the automatic setup scripts below to download these
+models in advance.
+
 ## Automatic Setup
 
 ### Windows
@@ -372,3 +409,27 @@ python -m compileall tubby tests
 pip install -e ".[build]"
 pyinstaller tubby.spec
 ```
+
+On Windows, this creates `dist/Tubby.exe`. On macOS, it creates `dist/Tubby.app`.
+
+## Release Installers
+
+The `Build release installers` GitHub Actions workflow runs the full tests and builds:
+
+- A Windows x64 Inno Setup installer
+- A native Apple silicon DMG
+- A native Intel Mac DMG
+- `SHA256SUMS.txt` for tagged releases
+
+Run the workflow manually to test release artifacts. Pushing a version tag that matches
+`pyproject.toml`, such as `v0.9.0`, builds the installers and publishes a GitHub release.
+Packaging implementation and local build commands are documented in
+[`packaging/README.md`](packaging/README.md).
+
+## Release Signing
+
+Unsigned installers are usable but can trigger Windows SmartScreen or macOS Gatekeeper.
+The release workflow signs Windows and macOS artifacts when signing secrets are configured.
+Apple notarization uses `notarytool` and staples the resulting ticket to each DMG. Secret
+names and certificate preparation are documented in
+[`packaging/README.md`](packaging/README.md).

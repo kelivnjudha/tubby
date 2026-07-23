@@ -1,0 +1,295 @@
+name: Build release installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  test:
+    name: Test release source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install test dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Run Ruff
+        run: python -m ruff check .
+      - name: Run tests
+        run: python -m unittest discover -s tests
+
+  windows:
+    name: Windows x64 installer
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install build dependencies
+        run: python -m pip install -e ".[build]"
+      - name: Read and verify version
+        id: metadata
+        shell: pwsh
+        run: |
+          $version = python -c "from importlib.metadata import version; print(version('tubby-downloader'))"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
+              throw "Tag $env:GITHUB_REF_NAME does not match project version $version."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Build Tubby executable
+        run: >
+          python -m PyInstaller
+          --noconfirm
+          --clean
+          --distpath dist
+          --workpath build/pyinstaller
+          tubby.spec
+      - name: Sign Tubby executable when configured
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: ./packaging/windows/sign_file.ps1 -FilePath ./dist/Tubby.exe
+      - name: Create installer icon
+        run: >
+          python packaging/windows/create_icon.py
+          public/logo/tubby_logo.png
+          build/installer/tubby_logo.ico
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Compile Windows installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.metadata.outputs.version }}"
+          $sourceExe = (Resolve-Path "./dist/Tubby.exe").Path
+          $outputDir = Join-Path $PWD "release"
+          $setupIcon = (Resolve-Path "./build/installer/tubby_logo.ico").Path
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+          $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source
+          & $iscc `
+              "/DAppVersion=$version" `
+              "/DSourceExe=$sourceExe" `
+              "/DOutputDir=$outputDir" `
+              "/DSetupIcon=$setupIcon" `
+              "./packaging/windows/Tubby.iss"
+          if ($LASTEXITCODE -ne 0) {
+              throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+      - name: Sign Windows installer when configured
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: >
+          ./packaging/windows/sign_file.ps1
+          -FilePath
+          "./release/Tubby-${{ steps.metadata.outputs.version }}-Windows-x64-Setup.exe"
+      - name: Smoke-test Windows installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.metadata.outputs.version }}"
+          $installer = Resolve-Path "./release/Tubby-$version-Windows-x64-Setup.exe"
+          $installDir = Join-Path $env:RUNNER_TEMP "TubbyInstallTest"
+          & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/DIR=$installDir"
+          if ($LASTEXITCODE -ne 0) {
+              throw "Installer smoke test failed with exit code $LASTEXITCODE."
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $installDir "Tubby.exe"))) {
+              throw "Installer did not create Tubby.exe."
+          }
+          & (Join-Path $installDir "unins000.exe") /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tubby-Windows-x64
+          path: release/Tubby-${{ steps.metadata.outputs.version }}-Windows-x64-Setup.exe
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.architecture }} DMG
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install build dependencies
+        run: python -m pip install -e ".[build]"
+      - name: Read and verify version
+        id: metadata
+        shell: bash
+        run: |
+          version="$(python -c "from importlib.metadata import version; print(version('tubby-downloader'))")"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$version" ]]; then
+              echo "Tag $GITHUB_REF_NAME does not match project version $version." >&2
+              exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Import Apple signing certificate when configured
+        id: signing
+        shell: bash
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          if [[ -z "$MACOS_CERTIFICATE_P12" ]]; then
+              echo "Apple signing certificate is not configured; building an unsigned DMG."
+              echo "configured=false" >> "$GITHUB_OUTPUT"
+              exit 0
+          fi
+          if [[ -z "$MACOS_SIGNING_IDENTITY" ]]; then
+              echo "MACOS_SIGNING_IDENTITY is required with MACOS_CERTIFICATE_P12." >&2
+              exit 1
+          fi
+
+          certificate_path="$RUNNER_TEMP/tubby-signing-certificate.p12"
+          keychain_path="$RUNNER_TEMP/tubby-signing.keychain-db"
+          keychain_password="tubby-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+
+          printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+              -P "$MACOS_CERTIFICATE_PASSWORD" \
+              -A \
+              -t cert \
+              -f pkcs12 \
+              -k "$keychain_path"
+          security set-key-partition-list \
+              -S apple-tool:,apple: \
+              -s \
+              -k "$keychain_password" \
+              "$keychain_path"
+          security list-keychains -d user -s "$keychain_path" login.keychain-db
+
+          echo "TUBBY_CODESIGN_IDENTITY=$MACOS_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          echo "TUBBY_SIGNING_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+      - name: Build macOS app bundle
+        run: >
+          python -m PyInstaller
+          --noconfirm
+          --clean
+          --distpath dist
+          --workpath build/pyinstaller
+          tubby.spec
+      - name: Verify macOS app bundle
+        shell: bash
+        run: |
+          test -d dist/Tubby.app
+          plutil -lint dist/Tubby.app/Contents/Info.plist
+          codesign --verify --deep --strict --verbose=2 dist/Tubby.app
+      - name: Build macOS DMG
+        id: dmg
+        shell: bash
+        run: |
+          dmg_path="$(
+              bash packaging/macos/build_dmg.sh \
+                  dist/Tubby.app \
+                  "${{ steps.metadata.outputs.version }}" \
+                  "${{ matrix.architecture }}" \
+                  release |
+              tail -n 1
+          )"
+          echo "path=$dmg_path" >> "$GITHUB_OUTPUT"
+      - name: Sign macOS DMG when configured
+        if: steps.signing.outputs.configured == 'true'
+        shell: bash
+        run: |
+          codesign \
+              --force \
+              --timestamp \
+              --sign "$TUBBY_CODESIGN_IDENTITY" \
+              "${{ steps.dmg.outputs.path }}"
+          codesign --verify --verbose=2 "${{ steps.dmg.outputs.path }}"
+      - name: Notarize and staple macOS DMG when configured
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          if [[ "${{ steps.signing.outputs.configured }}" != "true" ]]; then
+              echo "Skipping notarization because the DMG is unsigned."
+              exit 0
+          fi
+          if [[ -z "$APPLE_ID" || -z "$APPLE_TEAM_ID" || -z "$APPLE_APP_PASSWORD" ]]; then
+              echo "Apple notarization credentials are incomplete; publishing a signed but unnotarized DMG."
+              exit 0
+          fi
+          xcrun notarytool submit "${{ steps.dmg.outputs.path }}" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --wait
+          xcrun stapler staple "${{ steps.dmg.outputs.path }}"
+          xcrun stapler validate "${{ steps.dmg.outputs.path }}"
+      - name: Remove temporary signing keychain
+        if: always() && steps.signing.outputs.configured == 'true'
+        shell: bash
+        run: security delete-keychain "$TUBBY_SIGNING_KEYCHAIN"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tubby-macOS-${{ matrix.architecture }}
+          path: release/Tubby-${{ steps.metadata.outputs.version }}-macOS-${{ matrix.architecture }}.dmg
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - windows
+      - macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Create checksums
+        working-directory: release-assets
+        run: sha256sum * > SHA256SUMS.txt
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          release-assets/*
+          --verify-tag
+          --generate-notes
+          --title "Tubby $GITHUB_REF_NAME"

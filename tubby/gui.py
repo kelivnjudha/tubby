@@ -527,8 +527,9 @@ class TubbyApp(ctk.CTk):
             self.model_var.set(DEFAULT_MODEL)
             self.model_choice_var.set(DEFAULT_MODEL)
             self._set_model_status(
-                "No installed Ollama model can generate reports. Run a Tubby setup script "
-                "to choose a compact report model, then refresh.",
+                "No installed Ollama model can generate reports. Install Ollama and pull a "
+                "report model such as qwen3:4b, then refresh. Source users can also run a "
+                "Tubby setup script.",
                 error=True,
             )
             self.analyze_button.configure(state="disabled")
