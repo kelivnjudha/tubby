@@ -33,6 +33,8 @@ from tubby.ollama_models import (
     OllamaModelError,
     choose_preferred_model,
     list_installed_models,
+    model_selector_details,
+    model_selector_label,
     ordered_report_models,
     report_language_warning,
     save_preferred_model,
@@ -78,6 +80,7 @@ class TubbyApp(ctk.CTk):
         self.report_style_var = ctk.StringVar(value=DEFAULT_REPORT_STYLE)
         self.include_source_transcript_var = ctk.BooleanVar(value=False)
         self.model_var = ctk.StringVar(value=DEFAULT_MODEL)
+        self.model_choice_var = ctk.StringVar(value=DEFAULT_MODEL)
         self.model_status_var = ctk.StringVar(value="Loading installed Ollama models...")
         self.whisper_model_var = ctk.StringVar(value=DEFAULT_WHISPER_MODEL)
         self.report_output_var = ctk.StringVar(
@@ -89,6 +92,8 @@ class TubbyApp(ctk.CTk):
         self._report_path: Path | None = None
         self._download_path: Path | None = None
         self._ollama_models: dict[str, OllamaModel] = {}
+        self._model_names_by_label: dict[str, str] = {}
+        self._model_labels_by_name: dict[str, str] = {}
         self._model_refreshing = False
         self._selected_model_installed = False
         self._mode_info = {
@@ -287,14 +292,22 @@ class TubbyApp(ctk.CTk):
             row=3, column=0, padx=(16, 12), pady=8, sticky="w"
         )
         model_controls = ctk.CTkFrame(frame, fg_color="transparent")
-        model_controls.grid(row=3, column=1, padx=(0, 16), pady=8, sticky="ew")
+        model_controls.grid(
+            row=3,
+            column=1,
+            columnspan=3,
+            padx=(0, 16),
+            pady=8,
+            sticky="ew",
+        )
         model_controls.grid_columnconfigure(0, weight=1)
         self.model_menu = ctk.CTkOptionMenu(
             model_controls,
             values=[DEFAULT_MODEL],
-            variable=self.model_var,
+            variable=self.model_choice_var,
             command=self._model_changed,
-            width=160,
+            width=500,
+            dynamic_resizing=False,
             state="disabled",
         )
         self.model_menu.grid(row=0, column=0, sticky="ew")
@@ -307,7 +320,7 @@ class TubbyApp(ctk.CTk):
         self.refresh_models_button.grid(row=0, column=1, padx=(8, 0))
 
         ctk.CTkLabel(frame, text="Speech model").grid(
-            row=3, column=2, padx=(8, 12), pady=8, sticky="e"
+            row=5, column=0, padx=(16, 12), pady=8, sticky="w"
         )
         self.whisper_model_menu = ctk.CTkOptionMenu(
             frame,
@@ -316,7 +329,7 @@ class TubbyApp(ctk.CTk):
             width=170,
             state="disabled",
         )
-        self.whisper_model_menu.grid(row=3, column=3, padx=(0, 16), pady=8, sticky="e")
+        self.whisper_model_menu.grid(row=5, column=1, padx=(0, 16), pady=8, sticky="w")
 
         self.model_status_label = ctk.CTkLabel(
             frame,
@@ -324,7 +337,7 @@ class TubbyApp(ctk.CTk):
             anchor="w",
             justify="left",
             wraplength=720,
-            text_color=("#8A5A00", "#E8B44C"),
+            text_color=("gray35", "gray72"),
         )
         self.model_status_label.grid(
             row=4,
@@ -336,7 +349,7 @@ class TubbyApp(ctk.CTk):
         )
 
         ctk.CTkLabel(frame, text="PDF options").grid(
-            row=5, column=0, padx=(16, 12), pady=8, sticky="w"
+            row=5, column=2, padx=(8, 12), pady=8, sticky="e"
         )
         self.include_source_transcript_switch = ctk.CTkSwitch(
             frame,
@@ -347,8 +360,7 @@ class TubbyApp(ctk.CTk):
         )
         self.include_source_transcript_switch.grid(
             row=5,
-            column=1,
-            columnspan=3,
+            column=3,
             padx=(0, 16),
             pady=8,
             sticky="w",
@@ -476,12 +488,15 @@ class TubbyApp(ctk.CTk):
         self._model_refreshing = False
         report_models = ordered_report_models(models)
         self._ollama_models = {model.name: model for model in report_models}
+        self._model_names_by_label = {}
+        self._model_labels_by_name = {}
         self.refresh_models_button.configure(state="normal" if not self._busy else "disabled")
 
         if not report_models:
             self._selected_model_installed = False
             self.model_menu.configure(values=[DEFAULT_MODEL], state="disabled")
             self.model_var.set(DEFAULT_MODEL)
+            self.model_choice_var.set(DEFAULT_MODEL)
             self._set_model_status(
                 "No installed Ollama model can generate reports. Run a Tubby setup script "
                 "to choose a compact report model, then refresh.",
@@ -493,28 +508,44 @@ class TubbyApp(ctk.CTk):
         selected = choose_preferred_model(report_models, self.model_var.get())
         if selected is None:
             return
+        labels = [model_selector_label(model) for model in report_models]
+        self._model_names_by_label = {
+            label: model.name for label, model in zip(labels, report_models, strict=True)
+        }
+        self._model_labels_by_name = {
+            model_name: label for label, model_name in self._model_names_by_label.items()
+        }
         self.model_menu.configure(
-            values=[model.name for model in report_models],
+            values=labels,
             state="normal" if not self._busy else "disabled",
         )
         self.model_var.set(selected.name)
+        self.model_choice_var.set(self._model_labels_by_name[selected.name])
         self._model_changed(selected.name)
 
     def _model_refresh_failed(self, message: str) -> None:
         self._model_refreshing = False
         self._ollama_models = {}
+        self._model_names_by_label = {}
+        self._model_labels_by_name = {}
         self._selected_model_installed = False
         self.model_menu.configure(state="disabled")
         self.refresh_models_button.configure(state="normal" if not self._busy else "disabled")
         self.analyze_button.configure(state="disabled")
         self._set_model_status(message, error=True)
 
-    def _model_changed(self, selected_model: str) -> None:
+    def _model_changed(self, selected_value: str) -> None:
+        selected_model = self._model_names_by_label.get(selected_value, selected_value)
         model = self._ollama_models.get(selected_model)
         self._selected_model_installed = model is not None
         if model is None:
             self.analyze_button.configure(state="disabled")
             return
+
+        self.model_var.set(model.name)
+        display_label = self._model_labels_by_name.get(model.name)
+        if display_label is not None:
+            self.model_choice_var.set(display_label)
 
         try:
             save_preferred_model(model.name)
@@ -532,18 +563,29 @@ class TubbyApp(ctk.CTk):
             )
 
         warning = report_language_warning(model)
+        details = model_selector_details(model)
         if warning:
-            self._set_model_status(warning)
+            self._set_model_status(f"{details}\nWarning: {warning}", warning=True)
         else:
-            self.model_status_var.set("")
-            self.model_status_label.grid_remove()
+            self._set_model_status(details)
 
         self.analyze_button.configure(
             state="normal" if self._selected_model_installed and not self._busy else "disabled"
         )
 
-    def _set_model_status(self, message: str, error: bool = False) -> None:
-        color = ("#A02828", "#FF8A80") if error else ("#8A5A00", "#E8B44C")
+    def _set_model_status(
+        self,
+        message: str,
+        *,
+        error: bool = False,
+        warning: bool = False,
+    ) -> None:
+        if error:
+            color = ("#A02828", "#FF8A80")
+        elif warning:
+            color = ("#8A5A00", "#E8B44C")
+        else:
+            color = ("gray35", "gray72")
         self.model_status_var.set(message)
         self.model_status_label.configure(text_color=color)
         self.model_status_label.grid()

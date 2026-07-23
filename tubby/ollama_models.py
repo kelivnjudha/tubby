@@ -434,6 +434,65 @@ def setup_model_label(model: OllamaModel) -> str:
     return f"{language_label}{size}"
 
 
+def model_selector_label(model: OllamaModel) -> str:
+    recommendation = model_recommendation(model)
+    if recommendation is not None:
+        profile = recommendation.profile
+    elif model.language_support == ModelLanguageSupport.MULTILINGUAL:
+        profile = "Multilingual - not profiled"
+    elif model.language_support == ModelLanguageSupport.ENGLISH_ONLY:
+        profile = "English focused - not profiled"
+    elif model.language_support == ModelLanguageSupport.UNSUPPORTED:
+        profile = "Not compatible"
+    else:
+        profile = "Compatibility unverified"
+    return f"{model.name} | {profile} | {model_size_label(model)}"
+
+
+def model_selector_details(model: OllamaModel) -> str:
+    recommendation = model_recommendation(model)
+    if recommendation is not None:
+        details = (
+            f"Best for: {recommendation.best_for}. "
+            f"Languages: {recommendation.language_note}."
+        )
+        if recommendation.tradeoff:
+            details += f" Tradeoff: {recommendation.tradeoff}."
+        return details
+
+    support_details = {
+        ModelLanguageSupport.MULTILINGUAL: "Multilingual report support is detected.",
+        ModelLanguageSupport.ENGLISH_ONLY: "Tubby restricts this model to English reports.",
+        ModelLanguageSupport.UNKNOWN: "Multilingual report support has not been verified.",
+        ModelLanguageSupport.UNSUPPORTED: "This model cannot generate Tubby reports.",
+    }
+    parameter_details = (
+        f" Parameters: {model.parameter_size}." if model.parameter_size else ""
+    )
+    return (
+        "Tubby has no task-specific strength recommendation for this installed model. "
+        f"{support_details[model.language_support]}{parameter_details}"
+    )
+
+
+def model_size_label(model: OllamaModel) -> str:
+    if model.size_bytes:
+        if model.size_bytes >= 1_000_000_000:
+            return f"{model.size_bytes / 1_000_000_000:.1f} GB"
+        if model.size_bytes >= 1_000_000:
+            return f"{model.size_bytes / 1_000_000:.0f} MB"
+        if model.size_bytes >= 1_000:
+            return f"{model.size_bytes / 1_000:.0f} KB"
+        return f"{model.size_bytes} bytes"
+
+    recommendation = model_recommendation(model)
+    if recommendation is not None:
+        return recommendation.download_size
+    if model.parameter_size:
+        return f"{model.parameter_size} parameters"
+    return "size unknown"
+
+
 def choose_setup_model(
     models: tuple[OllamaModel, ...],
     preferred: str = RECOMMENDED_MODEL,

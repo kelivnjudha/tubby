@@ -18,6 +18,9 @@ from tubby.ollama_models import (
     list_installed_models,
     load_preferred_model,
     model_recommendation,
+    model_selector_details,
+    model_selector_label,
+    model_size_label,
     models_match,
     ordered_report_models,
     report_language_warning,
@@ -52,6 +55,31 @@ class OllamaModelCompatibilityTests(unittest.TestCase):
         self.assertEqual(model.language_support, ModelLanguageSupport.MULTILINGUAL)
         self.assertIn("Official language support is limited", report_language_warning(model))
         self.assertIn("Thai", report_language_warning(model))
+
+    def test_curated_selector_label_shows_recommendation_strength_and_size(self) -> None:
+        model = _model("qwen3:4b", family="qwen3")
+
+        label = model_selector_label(model)
+
+        self.assertIn("qwen3:4b", label)
+        self.assertIn("Recommended - best overall", label)
+        self.assertIn("~2.5 GB", label)
+        self.assertIn("polished multilingual e-books", model_selector_details(model))
+
+    def test_unprofiled_selector_label_uses_installed_metadata(self) -> None:
+        model = OllamaModel(
+            name="custom-reporter:7b",
+            family="custom",
+            families=("custom",),
+            capabilities=("completion",),
+            parameter_size="7.0B",
+            size_bytes=3_250_000_000,
+        )
+
+        self.assertEqual(model_size_label(model), "3.2 GB")
+        self.assertIn("Compatibility unverified", model_selector_label(model))
+        self.assertIn("no task-specific strength", model_selector_details(model))
+        self.assertIn("7.0B", model_selector_details(model))
 
     def test_english_focused_model_restricts_report_languages(self) -> None:
         model = _model("codellama:7b", family="llama")

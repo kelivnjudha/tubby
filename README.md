@@ -30,7 +30,8 @@ The right side of the desktop mode switch supports:
 4. A separate local-model synthesis pass that builds coherent chapters without inventing facts.
 5. A PDF with a cover, contents, executive summary, introduction, timestamped chapters,
    takeaways, conclusion, reference notes, and an optional raw transcript appendix.
-6. An Ollama model selector populated from compatible models installed on the computer.
+6. An Ollama model selector populated from compatible installed models, with each model's
+   recommendation, report strength, and approximate installed size.
 
 YouTube caption retrieval requires internet access. Local media transcription and Ollama
 analysis run on your computer after their models have been downloaded.
@@ -194,6 +195,11 @@ The Ollama model selector reads compatible installed models automatically. Choos
 report language, output style, models, and output folder, then select
 `Create PDF`.
 
+When several Ollama models are installed, each menu option uses the format
+`model | recommendation or strength | size`. The selected-model summary explains its best
+uses, language coverage, and known tradeoffs. Models outside Tubby's curated catalog remain
+available but are clearly marked as unprofiled or unverified.
+
 Reports are saved to `Downloads/Tubby Reports` by default.
 Enable `Add Raw Source Transcript` only when the PDF should include the complete caption or
 speech-recognition text. Each chapter shows its supporting source range. In YouTube reports,
@@ -235,7 +241,8 @@ other compatible local models remain supported and appear as installed options.
 
 The selected model is saved in the current user's Tubby configuration and restored the next
 time the desktop app starts. The desktop selector lists compatible models that are actually
-installed; run setup or `ollama pull MODEL_NAME`, then select `Refresh` to add another one.
+installed and compares their recommendation, strength, and detected size; run setup or
+`ollama pull MODEL_NAME`, then select `Refresh` to add another one.
 
 Ollama does not expose language support in its installed-model metadata. Tubby therefore
 uses a conservative family classification:
