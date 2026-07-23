@@ -109,16 +109,27 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.metadata.outputs.version }}"
-          $installer = Resolve-Path "./release/Tubby-$version-Windows-x64-Setup.exe"
+          $installer = (Resolve-Path "./release/Tubby-$version-Windows-x64-Setup.exe").Path
           $installDir = Join-Path $env:RUNNER_TEMP "TubbyInstallTest"
-          & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/DIR=$installDir"
-          if ($LASTEXITCODE -ne 0) {
-              throw "Installer smoke test failed with exit code $LASTEXITCODE."
+          $installProcess = Start-Process `
+              -FilePath $installer `
+              -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$installDir" `
+              -Wait `
+              -PassThru
+          if ($installProcess.ExitCode -ne 0) {
+              throw "Installer smoke test failed with exit code $($installProcess.ExitCode)."
           }
           if (-not (Test-Path -LiteralPath (Join-Path $installDir "Tubby.exe"))) {
               throw "Installer did not create Tubby.exe."
           }
-          & (Join-Path $installDir "unins000.exe") /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+          $uninstallProcess = Start-Process `
+              -FilePath (Join-Path $installDir "unins000.exe") `
+              -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" `
+              -Wait `
+              -PassThru
+          if ($uninstallProcess.ExitCode -ne 0) {
+              throw "Uninstaller smoke test failed with exit code $($uninstallProcess.ExitCode)."
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: Tubby-Windows-x64
