@@ -13,18 +13,114 @@ from typing import Any, TextIO
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-RECOMMENDED_MODEL = "gemma4"
+
+@dataclass(frozen=True)
+class ModelRecommendation:
+    name: str
+    download_size: str
+    profile: str
+    best_for: str
+    language_note: str
+    tradeoff: str = ""
+    language_warning: str = ""
+    source_url: str = ""
+
+
+MODEL_RECOMMENDATIONS = (
+    ModelRecommendation(
+        name="qwen3:4b",
+        download_size="~2.5 GB",
+        profile="Recommended - best overall",
+        best_for="polished multilingual e-books, stories, and fully detailed reports",
+        language_note="119 languages and dialects",
+        source_url="https://ollama.com/library/qwen3:4b",
+    ),
+    ModelRecommendation(
+        name="granite4.1:3b",
+        download_size="~2.1 GB",
+        profile="Best structured reports",
+        best_for="evidence extraction, JSON reliability, and technical or business material",
+        language_note="multilingual",
+        source_url="https://ollama.com/library/granite4.1:3b",
+    ),
+    ModelRecommendation(
+        name="qwen3.5:2b-q4_K_M",
+        download_size="~1.9 GB",
+        profile="Small modern option",
+        best_for="low-memory machines and fast short or medium reports",
+        language_note="broad multilingual support",
+        tradeoff="less nuance on fully detailed long reports",
+        source_url="https://ollama.com/library/qwen3.5:2b-q4_K_M",
+    ),
+    ModelRecommendation(
+        name="qwen3:1.7b",
+        download_size="~1.4 GB",
+        profile="Smallest practical option",
+        best_for="briefs and shorter videos on constrained hardware",
+        language_note="119 languages and dialects",
+        tradeoff="simpler prose and weaker long-report synthesis",
+        source_url="https://ollama.com/library/qwen3:1.7b",
+    ),
+    ModelRecommendation(
+        name="llama3.2:3b",
+        download_size="~2.0 GB",
+        profile="Fast summaries",
+        best_for="concise summaries, rewriting, and story-style reports",
+        language_note="8 officially supported languages",
+        tradeoff="other report languages are unverified",
+        language_warning=(
+            "Official language support is limited to English, German, French, Italian, "
+            "Portuguese, Hindi, Spanish, and Thai. Other report languages may be unreliable."
+        ),
+        source_url="https://ollama.com/library/llama3.2:3b",
+    ),
+    ModelRecommendation(
+        name="phi4-mini:3.8b",
+        download_size="~2.5 GB",
+        profile="Technical reasoning",
+        best_for="lectures with math, logic, or dense technical explanations",
+        language_note="multilingual",
+        source_url="https://ollama.com/library/phi4-mini:3.8b",
+    ),
+    ModelRecommendation(
+        name="gemma3:4b",
+        download_size="~3.3 GB",
+        profile="Broad language coverage",
+        best_for="reports where broad multilingual writing quality matters most",
+        language_note="140+ languages",
+        source_url="https://ollama.com/library/gemma3:4b",
+    ),
+    ModelRecommendation(
+        name="ministral-3:3b",
+        download_size="~3.0 GB",
+        profile="Long structured reports",
+        best_for="long-context consolidation and JSON-oriented output",
+        language_note="dozens of languages",
+        tradeoff="requires a current Ollama release",
+        source_url="https://ollama.com/library/ministral-3:3b",
+    ),
+)
+
+RECOMMENDED_MODEL = MODEL_RECOMMENDATIONS[0].name
 DEFAULT_OLLAMA_URL = os.environ.get("TUBBY_OLLAMA_URL", "http://127.0.0.1:11434")
 
 _MULTILINGUAL_FAMILIES = (
     "gemma4",
+    "gemma3n",
     "gemma3",
+    "qwen35",
     "qwen3",
     "qwen25",
     "qwen2",
     "qwen15",
     "qwen",
     "aya",
+    "granite41",
+    "granite4",
+    "llama32",
+    "phi4mini",
+    "ministral3",
+    "mistral3",
 )
 _ENGLISH_FOCUSED_FAMILIES = (
     "codegemma",
@@ -129,7 +225,7 @@ class OllamaModel:
 
     @property
     def is_recommended(self) -> bool:
-        return _canonical_family(self.name.split(":", 1)[0]) == _canonical_family(RECOMMENDED_MODEL)
+        return models_match(self.name, RECOMMENDED_MODEL)
 
     def _classification_candidates(self) -> tuple[str, ...]:
         values = (self.name.split(":", 1)[0], self.family, *self.families)
@@ -285,10 +381,20 @@ def models_match(left: str, right: str) -> bool:
     return _model_alias(left) == _model_alias(right)
 
 
+def model_recommendation(model: OllamaModel | str) -> ModelRecommendation | None:
+    name = model.name if isinstance(model, OllamaModel) else model
+    return next(
+        (
+            recommendation
+            for recommendation in MODEL_RECOMMENDATIONS
+            if models_match(name, recommendation.name)
+        ),
+        None,
+    )
+
+
 def report_language_warning(model: OllamaModel) -> str:
     support = model.language_support
-    if support == ModelLanguageSupport.MULTILINGUAL:
-        return ""
     if support == ModelLanguageSupport.ENGLISH_ONLY:
         return (
             f"{model.name} is classified as English-focused. "
@@ -296,6 +402,11 @@ def report_language_warning(model: OllamaModel) -> str:
         )
     if support == ModelLanguageSupport.UNSUPPORTED:
         return f"{model.name} cannot generate Tubby reports."
+    recommendation = model_recommendation(model)
+    if recommendation is not None and recommendation.language_warning:
+        return f"{model.name}: {recommendation.language_warning}"
+    if support == ModelLanguageSupport.MULTILINGUAL:
+        return ""
     return (
         f"Tubby cannot confirm multilingual report support for {model.name}. "
         "Non-English output may be unreliable."
@@ -303,6 +414,13 @@ def report_language_warning(model: OllamaModel) -> str:
 
 
 def setup_model_label(model: OllamaModel) -> str:
+    recommendation = model_recommendation(model)
+    if recommendation is not None:
+        return (
+            f"{recommendation.profile}; {recommendation.language_note}; "
+            f"{recommendation.download_size} download"
+        )
+
     support = model.language_support
     if support == ModelLanguageSupport.MULTILINGUAL:
         language_label = "multilingual reports supported"
@@ -331,8 +449,6 @@ def choose_setup_model(
     output_stream = output_stream or sys.stderr
     installed_preferred = find_installed_model(models, preferred)
     usable = ordered_report_models(models)
-    if installed_preferred is None and models_match(preferred, RECOMMENDED_MODEL):
-        installed_preferred = next((model for model in usable if model.is_recommended), None)
 
     if explicit:
         if installed_preferred is not None:
@@ -350,16 +466,7 @@ def choose_setup_model(
         _write_setup_warning(choice.model, output_stream)
         return choice
 
-    if installed_preferred is not None and installed_preferred.can_generate_reports:
-        choice = SetupModelChoice(installed_preferred, installed=True)
-        _write_setup_warning(choice.model, output_stream)
-        return choice
-
-    choices: list[SetupModelChoice] = []
-    inferred_preferred = OllamaModel.inferred(preferred)
-    if allow_install and inferred_preferred.can_generate_reports:
-        choices.append(SetupModelChoice(inferred_preferred, installed=False))
-    choices.extend(SetupModelChoice(model, installed=True) for model in usable)
+    choices = _setup_model_choices(usable, preferred, allow_install)
     if not choices:
         raise OllamaModelError(
             "No compatible Ollama model is available for Tubby report generation."
@@ -371,12 +478,12 @@ def choose_setup_model(
     if interactive is None:
         interactive = input_stream.isatty() and not configured_selection
 
-    if len(choices) == 1:
-        choice = choices[0]
-    elif configured_selection:
+    if configured_selection:
         choice = _resolve_setup_selection(choices, configured_selection)
-    elif not interactive:
+    elif len(choices) == 1:
         choice = choices[0]
+    elif not interactive:
+        choice = _unattended_setup_choice(choices, preferred)
     else:
         choice = _prompt_for_setup_model(choices, input_stream, output_stream)
 
@@ -384,19 +491,90 @@ def choose_setup_model(
     return choice
 
 
+def _setup_model_choices(
+    installed_models: tuple[OllamaModel, ...],
+    preferred: str,
+    allow_install: bool,
+) -> list[SetupModelChoice]:
+    choices: list[SetupModelChoice] = []
+
+    def add_choice(model: OllamaModel, installed: bool, *, first: bool = False) -> None:
+        if any(models_match(choice.model.name, model.name) for choice in choices):
+            return
+        choice = SetupModelChoice(model, installed=installed)
+        if first:
+            choices.insert(0, choice)
+        else:
+            choices.append(choice)
+
+    for recommendation in MODEL_RECOMMENDATIONS:
+        installed = find_installed_model(installed_models, recommendation.name)
+        if installed is not None:
+            add_choice(installed, installed=True)
+        elif allow_install:
+            add_choice(OllamaModel.inferred(recommendation.name), installed=False)
+
+    if not any(models_match(choice.model.name, preferred) for choice in choices):
+        installed_preferred = find_installed_model(installed_models, preferred)
+        if installed_preferred is not None:
+            add_choice(installed_preferred, installed=True, first=True)
+        elif allow_install:
+            inferred_preferred = OllamaModel.inferred(preferred)
+            if inferred_preferred.can_generate_reports:
+                add_choice(inferred_preferred, installed=False, first=True)
+
+    for model in installed_models:
+        add_choice(model, installed=True)
+    return choices
+
+
+def _unattended_setup_choice(
+    choices: list[SetupModelChoice],
+    preferred: str,
+) -> SetupModelChoice:
+    installed_preferred = next(
+        (
+            choice
+            for choice in choices
+            if choice.installed and models_match(choice.model.name, preferred)
+        ),
+        None,
+    )
+    if installed_preferred is not None:
+        return installed_preferred
+    return next((choice for choice in choices if choice.installed), choices[0])
+
+
 def _prompt_for_setup_model(
     choices: list[SetupModelChoice],
     input_stream: TextIO,
     output_stream: TextIO,
 ) -> SetupModelChoice:
-    output_stream.write("\nChoose the Ollama model Tubby should use for reports:\n")
+    output_stream.write(
+        "\nChoose the local Ollama model Tubby should use for reports.\n"
+        "Every curated option supports Tubby's extraction and PDF workflow. Smaller models "
+        "use less storage and memory, but may produce simpler long reports.\n\n"
+    )
     for index, choice in enumerate(choices, start=1):
-        install_label = "install" if not choice.installed else "installed"
+        recommendation = model_recommendation(choice.model)
+        state = "installed" if choice.installed else "download"
         recommended = " (Recommended)" if choice.model.is_recommended else ""
+        if recommendation is None:
+            output_stream.write(
+                f"  {index}. {choice.model.name}{recommended} "
+                f"[{state}; {setup_model_label(choice.model)}]\n"
+            )
+            continue
+
         output_stream.write(
             f"  {index}. {choice.model.name}{recommended} "
-            f"[{install_label}; {setup_model_label(choice.model)}]\n"
+            f"[{state}; {recommendation.download_size}]\n"
+            f"     {recommendation.profile}: {recommendation.best_for}.\n"
+            f"     Languages: {recommendation.language_note}."
         )
+        if recommendation.tradeoff:
+            output_stream.write(f" Tradeoff: {recommendation.tradeoff}.")
+        output_stream.write("\n")
 
     while True:
         output_stream.write("Select a model [1]: ")
@@ -416,7 +594,7 @@ def _resolve_setup_selection(
 ) -> SetupModelChoice:
     normalized = selection.strip()
     if normalized.casefold() in {"recommended", "default"}:
-        return choices[0]
+        return next((choice for choice in choices if choice.model.is_recommended), choices[0])
     if normalized.isdigit():
         index = int(normalized) - 1
         if 0 <= index < len(choices):
@@ -481,7 +659,7 @@ def _argument_parser() -> argparse.ArgumentParser:
 
     choose_parser = subparsers.add_parser(
         "choose-setup",
-        help="choose an installed model or the recommended model during setup",
+        help="choose an installed or curated compact report model during setup",
     )
     choose_parser.add_argument("--preferred", default=RECOMMENDED_MODEL)
     choose_parser.add_argument("--explicit", action="store_true")

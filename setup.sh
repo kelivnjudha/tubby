@@ -6,7 +6,7 @@ if (($# >= 1)); then
     MODEL_WAS_EXPLICIT=1
 fi
 
-MODEL="${1:-gemma4}"
+MODEL="${1:-qwen3:4b}"
 SPEECH_MODEL="${2:-small}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_PATH="$PROJECT_ROOT/.venv"

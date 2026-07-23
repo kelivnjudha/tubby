@@ -8,6 +8,8 @@ from io import StringIO
 from unittest.mock import patch
 
 from tubby.ollama_models import (
+    MODEL_RECOMMENDATIONS,
+    RECOMMENDED_MODEL,
     ModelLanguageSupport,
     OllamaModel,
     OllamaModelError,
@@ -15,10 +17,12 @@ from tubby.ollama_models import (
     choose_setup_model,
     list_installed_models,
     load_preferred_model,
+    model_recommendation,
     models_match,
     ordered_report_models,
     report_language_warning,
     save_preferred_model,
+    setup_model_label,
 )
 
 
@@ -29,6 +33,25 @@ class OllamaModelCompatibilityTests(unittest.TestCase):
         self.assertTrue(model.can_generate_reports)
         self.assertEqual(model.language_support, ModelLanguageSupport.MULTILINGUAL)
         self.assertEqual(report_language_warning(model), "")
+
+    def test_every_curated_model_is_compatible_with_report_generation(self) -> None:
+        for recommendation in MODEL_RECOMMENDATIONS:
+            with self.subTest(model=recommendation.name):
+                model = OllamaModel.inferred(recommendation.name)
+
+                self.assertTrue(model.can_generate_reports)
+                self.assertEqual(
+                    model.language_support,
+                    ModelLanguageSupport.MULTILINGUAL,
+                )
+                self.assertEqual(model_recommendation(model), recommendation)
+
+    def test_llama_3_2_reports_its_official_language_limit(self) -> None:
+        model = _model("llama3.2:3b", family="llama3.2")
+
+        self.assertEqual(model.language_support, ModelLanguageSupport.MULTILINGUAL)
+        self.assertIn("Official language support is limited", report_language_warning(model))
+        self.assertIn("Thai", report_language_warning(model))
 
     def test_english_focused_model_restricts_report_languages(self) -> None:
         model = _model("codellama:7b", family="llama")
@@ -72,19 +95,32 @@ class OllamaModelCompatibilityTests(unittest.TestCase):
 
         self.assertEqual(selected, qwen)
 
-    def test_smallest_compatible_model_is_the_fallback(self) -> None:
+    def test_smallest_compatible_model_is_the_fallback_without_recommendation(
+        self,
+    ) -> None:
         large = _model("qwen3:14b", family="qwen3", size_bytes=14_000)
-        small = _model("qwen3:4b", family="qwen3", size_bytes=4_000)
+        small = _model("qwen3:1.7b", family="qwen3", size_bytes=1_700)
 
         selected = choose_preferred_model((large, small), preferred="missing")
 
         self.assertEqual(selected, small)
 
-    def test_gemma_variant_counts_as_the_recommended_family(self) -> None:
+    def test_only_the_balanced_default_is_marked_recommended(self) -> None:
+        balanced = _model("qwen3:4b", family="qwen3")
+        larger = _model("qwen3:14b", family="qwen3")
+
+        self.assertTrue(balanced.is_recommended)
+        self.assertFalse(larger.is_recommended)
+
+    def test_unattended_setup_reuses_compatible_installed_model(self) -> None:
         gemma_variant = _model("gemma4:e2b", family="gemma4")
         output = StringIO()
 
-        choice = choose_setup_model((gemma_variant,), output_stream=output)
+        choice = choose_setup_model(
+            (gemma_variant,),
+            interactive=False,
+            output_stream=output,
+        )
 
         self.assertEqual(choice.model, gemma_variant)
         self.assertTrue(choice.installed)
@@ -123,15 +159,29 @@ class OllamaModelApiTests(unittest.TestCase):
 
 
 class SetupModelChoiceTests(unittest.TestCase):
-    def test_setup_recommends_gemma_when_other_models_are_installed(self) -> None:
-        qwen = _model("qwen3:4b", family="qwen3")
+    def test_unattended_setup_reuses_installed_model_before_downloading(self) -> None:
+        installed = _model("custom-reporter:latest", family="custom")
+        output = StringIO()
 
-        choice = choose_setup_model((qwen,), interactive=False)
+        choice = choose_setup_model(
+            (installed,),
+            interactive=False,
+            output_stream=output,
+        )
 
-        self.assertEqual(choice.model.name, "gemma4")
+        self.assertEqual(choice.model, installed)
+        self.assertTrue(choice.installed)
+        self.assertIn("multilingual", output.getvalue())
+
+    def test_unattended_setup_uses_balanced_default_when_none_are_installed(
+        self,
+    ) -> None:
+        choice = choose_setup_model((), interactive=False)
+
+        self.assertEqual(choice.model.name, RECOMMENDED_MODEL)
         self.assertFalse(choice.installed)
 
-    def test_setup_can_continue_with_installed_multilingual_model_without_warning(
+    def test_interactive_setup_describes_and_selects_installed_recommendation(
         self,
     ) -> None:
         qwen = _model("qwen3:4b", family="qwen3")
@@ -140,13 +190,34 @@ class SetupModelChoiceTests(unittest.TestCase):
         choice = choose_setup_model(
             (qwen,),
             interactive=True,
-            input_stream=StringIO("2\n"),
+            input_stream=StringIO("1\n"),
             output_stream=output,
         )
 
         self.assertEqual(choice.model, qwen)
         self.assertTrue(choice.installed)
+        self.assertIn("Recommended", output.getvalue())
+        self.assertIn("best overall", output.getvalue())
+        self.assertIn("2.5 GB", output.getvalue())
+        self.assertIn("119 languages", output.getvalue())
         self.assertNotIn("Warning:", output.getvalue())
+
+    def test_setup_can_select_a_curated_model_for_download(self) -> None:
+        choice = choose_setup_model(
+            (),
+            selection="granite4.1:3b",
+            output_stream=StringIO(),
+        )
+
+        self.assertEqual(choice.model.name, "granite4.1:3b")
+        self.assertFalse(choice.installed)
+        self.assertIn("Best structured reports", setup_model_label(choice.model))
+
+    def test_catalog_model_names_are_unique(self) -> None:
+        names = [recommendation.name.casefold() for recommendation in MODEL_RECOMMENDATIONS]
+
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(names[0], RECOMMENDED_MODEL)
 
     def test_setup_warns_when_selected_model_language_support_is_unknown(self) -> None:
         custom = _model("custom-reporter:latest", family="custom")
@@ -166,10 +237,21 @@ class SetupModelChoiceTests(unittest.TestCase):
         with self.assertRaisesRegex(OllamaModelError, "not installed"):
             choose_setup_model(
                 (),
-                preferred="gemma4",
+                preferred="qwen3:4b",
                 allow_install=False,
                 explicit=True,
             )
+
+    def test_explicit_legacy_model_still_bypasses_the_catalog(self) -> None:
+        choice = choose_setup_model(
+            (),
+            preferred="gemma4:e2b",
+            explicit=True,
+            output_stream=StringIO(),
+        )
+
+        self.assertEqual(choice.model.name, "gemma4:e2b")
+        self.assertFalse(choice.installed)
 
     def test_setup_rejects_explicit_embedding_model(self) -> None:
         with self.assertRaisesRegex(OllamaModelError, "cannot generate"):

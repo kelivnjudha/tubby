@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Model = "gemma4",
+    [string]$Model = "qwen3:4b",
     [string]$SpeechModel = "small",
     [switch]$SkipModelPull,
     [switch]$SkipSpeechModelDownload,

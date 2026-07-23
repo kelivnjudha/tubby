@@ -39,7 +39,7 @@ analysis run on your computer after their models have been downloaded.
 
 - Python 3.10 or newer
 - A current [Ollama](https://ollama.com/download) release
-- [Gemma 4](https://ollama.com/library/gemma4), recommended, or another compatible Ollama model
+- One compatible local Ollama text-generation model; setup offers several compact options
 - [faster-whisper](https://github.com/SYSTRAN/faster-whisper) and a local Whisper model
 - Internet access for setup, model downloads, and retrieving YouTube captions
 - FFmpeg on `PATH` only for MP3 conversion and high-resolution downloader CLI output
@@ -48,9 +48,10 @@ macOS users need macOS 14 Sonoma or newer because that is the minimum version su
 by the current Ollama release. Both Apple silicon and Intel Macs are supported; Ollama
 uses GPU acceleration on Apple silicon and CPU execution on Intel.
 
-The setup scripts recommend `gemma4` and download the multilingual Whisper `small` model
-by default. If other report-capable Ollama models are already installed, setup offers a
-choice between installing Gemma 4 and continuing with one of those models.
+The setup scripts present a model catalog instead of requiring Gemma 4. `qwen3:4b` is the
+balanced recommendation, and smaller downloads are available for constrained computers.
+Setup also detects compatible models already installed in Ollama. The multilingual Whisper
+`small` speech model remains the default transcription download.
 Performance depends on available RAM, GPU memory, media duration, and transcript length.
 Local speech-to-text defaults to CPU `int8` execution for consistent Windows, macOS, and
 Linux behavior.
@@ -73,8 +74,8 @@ powershell -ExecutionPolicy Bypass -File .\setup.ps1
 
 The script creates `.venv`, installs Tubby and local speech-to-text dependencies, downloads
 the `small` speech model, installs Ollama through `winget` when needed, and starts Ollama.
-When Gemma 4 is not installed but other models are available, it asks whether to install
-Gemma 4 or continue with an installed model.
+It then shows the compact model catalog with approximate download sizes, language coverage,
+recommended uses, and tradeoffs. Installed options are labeled and do not download again.
 
 To prohibit a new Ollama model download and choose only from installed models:
 
@@ -97,7 +98,7 @@ To install FFmpeg for the downloader CLI as part of setup:
 To explicitly select another Ollama model and bypass the interactive choice:
 
 ```powershell
-.\setup.ps1 -Model gemma4:e2b
+.\setup.ps1 -Model granite4.1:3b
 ```
 
 For unattended Windows setup, preselect an installed model with:
@@ -127,19 +128,19 @@ chmod +x setup-macos.command setup.sh
 
 The macOS setup checks for macOS 14 or newer, creates `.venv`, installs Python and Tk
 support through Homebrew when needed, installs Tubby and Ollama, downloads the local
-speech model, and starts Ollama. If another compatible model is already installed, the
-same Gemma 4 or installed-model choice is shown.
+speech model, and starts Ollama. It shows the same compact model catalog as Windows and
+labels compatible models that are already installed.
 
 Pass another Ollama model name as the first argument to select it directly:
 
 ```sh
-./setup-macos.command gemma4:e2b
+./setup-macos.command granite4.1:3b
 ```
 
 The optional second argument selects the speech model:
 
 ```sh
-./setup-macos.command gemma4 medium
+./setup-macos.command qwen3:4b medium
 ```
 
 ### Linux
@@ -152,13 +153,13 @@ chmod +x setup.sh
 Pass another Ollama model name as the first argument when required:
 
 ```sh
-./setup.sh gemma4:e2b
+./setup.sh granite4.1:3b
 ```
 
 The optional second argument selects the speech model:
 
 ```sh
-./setup.sh gemma4 medium
+./setup.sh qwen3:4b medium
 ```
 
 The Linux setup installs Ollama with its official installer when needed. The same
@@ -207,14 +208,41 @@ Select `Refresh` after installing or removing a model while Tubby is open.
 Ollama cloud entries are also omitted because Tubby keeps report generation on the local
 Ollama connection and relies on local structured output.
 
-Gemma 4 remains the recommended report model. The selected model is saved in the current
-user's Tubby configuration and restored the next time the desktop app starts.
+Interactive setup offers these local models. Download sizes are approximate and can change
+when Ollama updates a tag:
+
+| Model | Approx. download | Recommended use | Language coverage and tradeoffs |
+| --- | ---: | --- | --- |
+| **[Qwen 3 4B](https://ollama.com/library/qwen3:4b)** | 2.5 GB | **Best overall:** polished e-books, stories, and detailed reports | 119 languages and dialects |
+| [Granite 4.1 3B](https://ollama.com/library/granite4.1:3b) | 2.1 GB | **Best structured reports:** evidence extraction, JSON reliability, technical or business sources | Multilingual |
+| [Qwen 3.5 2B](https://ollama.com/library/qwen3.5:2b-q4_K_M) | 1.9 GB | Fast short or medium reports on low-memory computers | Multilingual; less nuance in long, fully detailed reports |
+| [Qwen 3 1.7B](https://ollama.com/library/qwen3:1.7b) | 1.4 GB | **Smallest practical option:** briefs and shorter videos | 119 languages and dialects; simpler prose and weaker long synthesis |
+| [Llama 3.2 3B](https://ollama.com/library/llama3.2:3b) | 2.0 GB | Fast summaries, rewriting, and story-style reports | Officially supports English, German, French, Italian, Portuguese, Hindi, Spanish, and Thai |
+| [Phi-4 Mini 3.8B](https://ollama.com/library/phi4-mini:3.8b) | 2.5 GB | Lectures with math, logic, or dense technical explanations | Multilingual |
+| [Gemma 3 4B](https://ollama.com/library/gemma3:4b) | 3.3 GB | Broad multilingual writing coverage | 140+ languages |
+| [Ministral 3 3B](https://ollama.com/library/ministral-3:3b) | 3.0 GB | Long-context consolidation and JSON-oriented output | Dozens of languages; requires a current Ollama release |
+
+Every catalog model can run Tubby's transcript extraction and PDF workflow. Smaller models
+reduce storage and memory requirements but can lose detail, prose quality, or structured
+output reliability on long sources. Available memory also depends on context length and
+hardware, not only the download size.
+
+`qwen3:4b` is the default highlighted recommendation, not a forced download. Interactive
+setup can choose any catalog entry or a compatible installed model. In unattended use,
+Tubby reuses the requested or first compatible installed model before downloading the
+default. Passing a model explicitly continues to bypass the chooser. Existing Gemma 4 and
+other compatible local models remain supported and appear as installed options.
+
+The selected model is saved in the current user's Tubby configuration and restored the next
+time the desktop app starts. The desktop selector lists compatible models that are actually
+installed; run setup or `ollama pull MODEL_NAME`, then select `Refresh` to add another one.
 
 Ollama does not expose language support in its installed-model metadata. Tubby therefore
 uses a conservative family classification:
 
-- Confirmed broad multilingual families such as Gemma 3/4, Qwen, and Aya keep every report
-  language option enabled and show no warning.
+- Confirmed multilingual catalog models and broad multilingual families such as Gemma,
+  Qwen, Granite, Phi, Ministral, and Aya keep report-language options enabled.
+- Llama 3.2 keeps language options available but shows its eight-language support limit.
 - Known English-focused families restrict the report language to English.
 - Unknown model families remain selectable, but Tubby warns that multilingual output has
   not been verified.
@@ -239,8 +267,8 @@ instructed not to invent dialogue, motives, events, examples, or conclusions.
 ## Language Support
 
 English is the default report language. The desktop app includes common language presets
-supported by Gemma 4 and Tubby's PDF renderer. Other model families are checked using the
-compatibility rules above.
+supported by the recommended multilingual models and Tubby's PDF renderer. Each selected
+model is checked using the compatibility rules above.
 
 The included PDF renderer supports the listed left-to-right language presets. Right-to-left
 PDF layout is not currently included, so languages such as Arabic are not offered as presets.
@@ -303,7 +331,7 @@ Activate the environment, then install Tubby:
 python -m pip install --upgrade pip
 pip install -e .
 python -c "from tubby.media_transcript import download_transcription_model; download_transcription_model('small')"
-ollama pull gemma4
+ollama pull qwen3:4b
 ```
 
 Ollama must be running at `http://127.0.0.1:11434`. Advanced installations can override
@@ -311,7 +339,7 @@ the defaults with:
 
 ```sh
 TUBBY_OLLAMA_URL=http://127.0.0.1:11434
-TUBBY_OLLAMA_MODEL=gemma4
+TUBBY_OLLAMA_MODEL=qwen3:4b
 TUBBY_WHISPER_MODEL=small
 TUBBY_WHISPER_DEVICE=cpu
 TUBBY_WHISPER_COMPUTE_TYPE=int8

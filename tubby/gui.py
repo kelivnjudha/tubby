@@ -483,7 +483,8 @@ class TubbyApp(ctk.CTk):
             self.model_menu.configure(values=[DEFAULT_MODEL], state="disabled")
             self.model_var.set(DEFAULT_MODEL)
             self._set_model_status(
-                "No installed Ollama model can generate reports. Install Gemma 4 and refresh.",
+                "No installed Ollama model can generate reports. Run a Tubby setup script "
+                "to choose a compact report model, then refresh.",
                 error=True,
             )
             self.analyze_button.configure(state="disabled")
