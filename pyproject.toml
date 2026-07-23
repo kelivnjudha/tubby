@@ -4,14 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tubby-downloader"
-version = "0.4.0"
-description = "Local YouTube transcript analysis with Gemma 4, plus a media downloader CLI."
+version = "0.5.0"
+description = "Local media transcription and intelligence with Gemma 4, plus media downloading."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
 authors = [{ name = "Kelvin" }]
 dependencies = [
     "customtkinter>=5.2.2",
+    "faster-whisper>=1.2.1,<2",
     "reportlab[shaping]>=5.0.0",
     "yt-dlp>=2024.12.13",
 ]

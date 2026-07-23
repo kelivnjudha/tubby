@@ -39,10 +39,24 @@ class VideoTranscript:
     cues: tuple[TranscriptCue, ...]
     uploader: str | None = None
     duration: int | None = None
+    source_kind: str = "youtube"
+    transcription_engine: str | None = None
 
     @property
     def text(self) -> str:
         return "\n".join(f"[{cue.timestamp}] {cue.text}" for cue in self.cues)
+
+    @property
+    def source_type_label(self) -> str:
+        return "Local media file" if self.source_kind == "local_media" else "YouTube"
+
+    @property
+    def transcript_source_label(self) -> str:
+        if self.transcription_engine:
+            return f"Local speech recognition - {self.transcription_engine}"
+        if self.is_auto_generated:
+            return f"Automatic captions - {self.language_name}"
+        return f"Manual captions - {self.language_name}"
 
 
 def fetch_youtube_transcript(

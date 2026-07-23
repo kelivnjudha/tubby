@@ -18,6 +18,9 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
+    CondPageBreak,
+    KeepTogether,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -26,6 +29,7 @@ from reportlab.platypus import (
 )
 
 from tubby.local_ai import AnalysisReport
+from tubby.report_styles import DEFAULT_REPORT_STYLE, get_report_style
 from tubby.transcript import VideoTranscript
 from tubby.utils import format_duration
 
@@ -55,6 +59,7 @@ def create_pdf_report(
     output_dir: str | Path,
     output_language: str,
     model: str,
+    report_style: str = DEFAULT_REPORT_STYLE,
     progress: ProgressCallback | None = None,
 ) -> Path:
     if progress is not None:
@@ -94,15 +99,16 @@ def create_pdf_report(
         leftMargin=18 * mm,
         topMargin=22 * mm,
         bottomMargin=20 * mm,
-        title=f"Tubby report: {transcript.title}",
+        title=analysis.report_title or f"Tubby report: {transcript.title}",
         author="Tubby",
-        subject="Local AI analysis of a YouTube transcript",
+        subject="Local AI analysis of a media transcript",
     )
     story = _build_story(
         transcript=transcript,
         analysis=analysis,
         output_language=output_language,
         model=model,
+        report_style=report_style,
         styles=styles,
     )
 
@@ -125,47 +131,123 @@ def _build_story(
     analysis: AnalysisReport,
     output_language: str,
     model: str,
+    report_style: str,
     styles: dict[str, ParagraphStyle],
 ) -> list[object]:
-    caption_source = "Automatic captions" if transcript.is_auto_generated else "Manual captions"
+    edition = get_report_style(report_style)
+    report_title = analysis.report_title or "Video Intelligence Report"
     story: list[object] = [
         Paragraph("TUBBY", styles["eyebrow"]),
-        Paragraph("Video Intelligence Report", styles["title"]),
-        Paragraph(escape(transcript.title), styles["video_title"]),
-        Spacer(1, 6 * mm),
-        _metadata_table(
-            (
-                ("Source", transcript.source_url),
-                ("Uploader", transcript.uploader or "Unknown"),
-                ("Duration", format_duration(transcript.duration)),
-                ("Transcript", f"{caption_source} - {transcript.language_name}"),
-                ("Report language", output_language),
-                ("Local model", model),
-            ),
-            styles,
-        ),
-        Spacer(1, 7 * mm),
-        Paragraph("Executive Summary", styles["section"]),
-        _summary_box(analysis.executive_summary, styles),
-        Spacer(1, 6 * mm),
+        Paragraph(escape(edition.document_label.upper()), styles["edition"]),
+        Spacer(1, 18 * mm),
+        Paragraph(escape(report_title), styles["cover_title"]),
     ]
+    if analysis.subtitle:
+        story.append(Paragraph(escape(analysis.subtitle), styles["cover_subtitle"]))
+    story.extend(
+        [
+            Spacer(1, 10 * mm),
+            Paragraph(escape(transcript.title), styles["video_title"]),
+            Spacer(1, 12 * mm),
+            _metadata_table(
+                (
+                    ("Source type", transcript.source_type_label),
+                    ("Source", transcript.source_url),
+                    ("Creator", transcript.uploader or "Unknown"),
+                    ("Duration", format_duration(transcript.duration)),
+                    ("Transcript", transcript.transcript_source_label),
+                    ("Edition", edition.document_label),
+                    ("Report language", output_language),
+                    ("Local model", model),
+                ),
+                styles,
+            ),
+            PageBreak(),
+            Paragraph("Contents", styles["title"]),
+        ]
+    )
+
+    contents = ["Executive Summary"]
+    if analysis.introduction:
+        contents.append("Introduction")
+    contents.extend(chapter.title for chapter in analysis.chapters)
+    if analysis.conclusion:
+        contents.append("Conclusion")
+    if any(
+        (
+            analysis.key_points,
+            analysis.important_details,
+            analysis.decisions_and_actions,
+            analysis.questions_and_caveats,
+        )
+    ):
+        contents.append("Reference Notes")
+    contents.append("Source Transcript")
+    for index, heading in enumerate(contents, start=1):
+        story.append(Paragraph(f"{index:02d}  {escape(heading)}", styles["contents"]))
+
+    story.extend(
+        [
+            Spacer(1, 8 * mm),
+            Paragraph("Executive Summary", styles["section"]),
+            _summary_box(analysis.executive_summary, styles),
+            Spacer(1, 7 * mm),
+        ]
+    )
+
+    if analysis.introduction:
+        story.append(Paragraph("Introduction", styles["section"]))
+        _append_paragraphs(story, analysis.introduction, styles["chapter_body"])
+        story.append(Spacer(1, 6 * mm))
+
+    for chapter_number, chapter in enumerate(analysis.chapters, start=1):
+        story.append(Paragraph(f"CHAPTER {chapter_number}", styles["chapter_number"]))
+        story.append(Paragraph(escape(chapter.title), styles["chapter_title"]))
+        _append_paragraphs(story, chapter.body, styles["chapter_body"])
+        if chapter.key_takeaways:
+            story.append(CondPageBreak(35 * mm))
+            takeaways = [Paragraph("Chapter Takeaways", styles["takeaway_heading"])]
+            takeaways.extend(
+                Paragraph(f"• {escape(item)}", styles["takeaway"]) for item in chapter.key_takeaways
+            )
+            story.append(KeepTogether(takeaways))
+        story.append(Spacer(1, 8 * mm))
+
+    if analysis.conclusion:
+        story.append(Paragraph("Conclusion", styles["section"]))
+        _append_paragraphs(story, analysis.conclusion, styles["chapter_body"])
+        story.append(Spacer(1, 7 * mm))
+
+    if any(
+        (
+            analysis.key_points,
+            analysis.important_details,
+            analysis.decisions_and_actions,
+            analysis.questions_and_caveats,
+        )
+    ):
+        story.append(Paragraph("Reference Notes", styles["title"]))
+        story.append(Spacer(1, 3 * mm))
 
     _append_list_section(story, "Key Points", analysis.key_points, styles)
     _append_list_section(story, "Important Details", analysis.important_details, styles)
     _append_list_section(story, "Decisions and Actions", analysis.decisions_and_actions, styles)
     _append_list_section(story, "Questions and Caveats", analysis.questions_and_caveats, styles)
 
+    transcript_note = (
+        "This appendix contains the speech recognized locally from the selected media file. "
+        "Timestamps are estimates produced by the local speech model."
+        if transcript.source_kind == "local_media"
+        else (
+            "This appendix contains the caption text supplied to the local AI model. "
+            "Timestamps are based on the selected YouTube caption track."
+        )
+    )
     story.extend(
         [
-            Spacer(1, 8 * mm),
+            CondPageBreak(60 * mm),
             Paragraph("Source Transcript", styles["title"]),
-            Paragraph(
-                (
-                    "This appendix contains the caption text supplied to the local AI model. "
-                    "Timestamps are based on the selected YouTube caption track."
-                ),
-                styles["body_muted"],
-            ),
+            Paragraph(transcript_note, styles["body_muted"]),
             Spacer(1, 5 * mm),
         ]
     )
@@ -177,6 +259,17 @@ def _build_story(
             )
         )
     return story
+
+
+def _append_paragraphs(
+    story: list[object],
+    content: str,
+    style: ParagraphStyle,
+) -> None:
+    for paragraph in re.split(r"\n\s*\n", content.strip()):
+        text = " ".join(paragraph.split()).strip()
+        if text:
+            story.append(Paragraph(escape(text), style))
 
 
 def _append_list_section(
@@ -267,6 +360,36 @@ def _build_styles(
             alignment=TA_LEFT,
             spaceAfter=3,
         ),
+        "edition": ParagraphStyle(
+            "TubbyEdition",
+            parent=sample["Normal"],
+            fontName=report_fonts.bold,
+            fontSize=10,
+            leading=13,
+            textColor=_MUTED,
+            alignment=TA_LEFT,
+        ),
+        "cover_title": ParagraphStyle(
+            "TubbyCoverTitle",
+            parent=sample["Title"],
+            fontName=report_fonts.bold,
+            fontSize=30,
+            leading=36,
+            textColor=_INK,
+            alignment=report_alignment,
+            wordWrap=report_wrap,
+            spaceAfter=8,
+        ),
+        "cover_subtitle": ParagraphStyle(
+            "TubbyCoverSubtitle",
+            parent=sample["BodyText"],
+            fontName=report_fonts.regular,
+            fontSize=14,
+            leading=20,
+            textColor=_MUTED,
+            alignment=report_alignment,
+            wordWrap=report_wrap,
+        ),
         "title": ParagraphStyle(
             "TubbyTitle",
             parent=sample["Title"],
@@ -286,6 +409,20 @@ def _build_styles(
             textColor=_MUTED,
             alignment=transcript_alignment,
             wordWrap=transcript_wrap,
+        ),
+        "contents": ParagraphStyle(
+            "TubbyContents",
+            parent=sample["BodyText"],
+            fontName=report_fonts.regular,
+            fontSize=11,
+            leading=16,
+            textColor=_INK,
+            borderColor=_LINE,
+            borderWidth=0,
+            borderPadding=(3, 0, 4, 0),
+            spaceAfter=4,
+            alignment=report_alignment,
+            wordWrap=report_wrap,
         ),
         "section": ParagraphStyle(
             "TubbySection",
@@ -320,6 +457,64 @@ def _build_styles(
             spaceAfter=5,
             alignment=report_alignment,
             wordWrap=report_wrap,
+        ),
+        "chapter_number": ParagraphStyle(
+            "TubbyChapterNumber",
+            parent=sample["Normal"],
+            fontName=report_fonts.bold,
+            fontSize=8,
+            leading=10,
+            textColor=_CORAL,
+            spaceBefore=4,
+            spaceAfter=4,
+            keepWithNext=True,
+        ),
+        "chapter_title": ParagraphStyle(
+            "TubbyChapterTitle",
+            parent=sample["Heading1"],
+            fontName=report_fonts.bold,
+            fontSize=20,
+            leading=25,
+            textColor=_INK,
+            alignment=report_alignment,
+            wordWrap=report_wrap,
+            spaceAfter=10,
+            keepWithNext=True,
+        ),
+        "chapter_body": ParagraphStyle(
+            "TubbyChapterBody",
+            parent=sample["BodyText"],
+            fontName=report_fonts.regular,
+            fontSize=10.5,
+            leading=16,
+            textColor=_INK,
+            alignment=report_alignment,
+            wordWrap=report_wrap,
+            spaceAfter=8,
+        ),
+        "takeaway_heading": ParagraphStyle(
+            "TubbyTakeawayHeading",
+            parent=sample["Heading3"],
+            fontName=report_fonts.bold,
+            fontSize=10,
+            leading=13,
+            textColor=_TEAL,
+            spaceBefore=3,
+            spaceAfter=4,
+            keepWithNext=True,
+        ),
+        "takeaway": ParagraphStyle(
+            "TubbyTakeaway",
+            parent=sample["BodyText"],
+            fontName=report_fonts.regular,
+            fontSize=9.5,
+            leading=14,
+            leftIndent=5 * mm,
+            firstLineIndent=-4 * mm,
+            textColor=_INK,
+            alignment=report_alignment,
+            wordWrap=report_wrap,
+            spaceAfter=4,
         ),
         "transcript": ParagraphStyle(
             "TubbyTranscript",
@@ -367,7 +562,7 @@ def _draw_page(canvas: object, document: object, fonts: FontFamily) -> None:
     canvas.line(18 * mm, page_height - 14 * mm, page_width - 18 * mm, page_height - 14 * mm)
     canvas.setFont(fonts.bold, 7.5)
     canvas.setFillColor(_MUTED)
-    canvas.drawString(18 * mm, page_height - 11 * mm, "TUBBY / LOCAL VIDEO INTELLIGENCE")
+    canvas.drawString(18 * mm, page_height - 11 * mm, "TUBBY / LOCAL MEDIA INTELLIGENCE")
     canvas.setFont(fonts.regular, 8)
     canvas.drawRightString(
         page_width - 18 * mm,
@@ -533,5 +728,5 @@ def _report_filename(transcript: VideoTranscript) -> str:
     safe_title = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", transcript.title)
     safe_title = re.sub(r"\s+", " ", safe_title).strip(" .")
     if not safe_title:
-        safe_title = "YouTube Video"
+        safe_title = "Media"
     return f"{safe_title[:90]} [{transcript.video_id}] - Tubby Report.pdf"

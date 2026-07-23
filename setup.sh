@@ -2,6 +2,7 @@
 set -euo pipefail
 
 MODEL="${1:-gemma4}"
+SPEECH_MODEL="${2:-small}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_PATH="$PROJECT_ROOT/.venv"
 VENV_PYTHON="$VENV_PATH/bin/python"
@@ -114,6 +115,9 @@ esac
 if [[ -z "${MODEL//[[:space:]]/}" ]]; then
     fail "The Ollama model name cannot be empty."
 fi
+if [[ -z "${SPEECH_MODEL//[[:space:]]/}" ]]; then
+    fail "The speech model name cannot be empty."
+fi
 
 if ! command -v curl >/dev/null 2>&1; then
     fail "curl is required to install or connect to Ollama."
@@ -141,6 +145,13 @@ fi
 step "Installing Tubby and Python dependencies"
 "$VENV_PYTHON" -m pip install --upgrade pip
 "$VENV_PYTHON" -m pip install -e "$PROJECT_ROOT"
+
+if [[ "${TUBBY_SKIP_SPEECH_MODEL_DOWNLOAD:-0}" != "1" ]]; then
+    step "Downloading local speech model $SPEECH_MODEL"
+    "$VENV_PYTHON" -c \
+        'import sys; from tubby.media_transcript import download_transcription_model; download_transcription_model(sys.argv[1])' \
+        "$SPEECH_MODEL"
+fi
 
 step "Checking Ollama"
 OLLAMA_BIN="$(find_ollama || true)"

@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [string]$Model = "gemma4",
+    [string]$SpeechModel = "small",
     [switch]$SkipModelPull,
+    [switch]$SkipSpeechModelDownload,
     [switch]$SkipOllamaInstall,
     [switch]$InstallFfmpeg
 )
@@ -13,6 +15,9 @@ $venvPython = Join-Path $venvPath "Scripts\python.exe"
 
 if ([string]::IsNullOrWhiteSpace($Model)) {
     throw "Model cannot be empty."
+}
+if ([string]::IsNullOrWhiteSpace($SpeechModel)) {
+    throw "SpeechModel cannot be empty."
 }
 
 function Write-Step {
@@ -64,6 +69,16 @@ try {
     & $venvPython -m pip install -e $projectRoot
     if ($LASTEXITCODE -ne 0) {
         throw "Could not install Tubby."
+    }
+
+    if (-not $SkipSpeechModelDownload) {
+        Write-Step "Downloading local speech model $SpeechModel"
+        & $venvPython `
+            -c "import sys; from tubby.media_transcript import download_transcription_model; download_transcription_model(sys.argv[1])" `
+            $SpeechModel
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not download speech model '$SpeechModel'."
+        }
     }
 
     Write-Step "Checking Ollama"
