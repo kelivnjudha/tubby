@@ -33,6 +33,10 @@ the Ollama API running on your computer by default.
 - Internet access for retrieving YouTube captions
 - FFmpeg on `PATH` only for MP3 conversion and high-resolution downloader CLI output
 
+macOS users need macOS 14 Sonoma or newer because that is the minimum version supported
+by the current Ollama release. Both Apple silicon and Intel Macs are supported; Ollama
+uses GPU acceleration on Apple silicon and CPU execution on Intel.
+
 The default `gemma4` Ollama model is approximately 9.6 GB. It supports multilingual
 analysis and a long context window, but performance depends on available RAM, GPU memory,
 and transcript length.
@@ -74,7 +78,29 @@ To use another Ollama model:
 .\setup.ps1 -Model gemma4:e2b
 ```
 
-### macOS And Linux
+### macOS
+
+Double-click `setup-macos.command` in Finder. If macOS asks for confirmation, Control-click
+the file, choose `Open`, and confirm once.
+
+You can also run the same setup from Terminal:
+
+```sh
+chmod +x setup-macos.command setup.sh
+./setup-macos.command
+```
+
+The macOS setup checks for macOS 14 or newer, creates `.venv`, installs Python and Tk
+support through Homebrew when needed, installs Tubby and Ollama, starts the local Ollama
+service, and downloads `gemma4`.
+
+Pass another Ollama model name as the first argument when required:
+
+```sh
+./setup-macos.command gemma4:e2b
+```
+
+### Linux
 
 ```sh
 chmod +x setup.sh
@@ -87,8 +113,8 @@ Pass another Ollama model name as the first argument when required:
 ./setup.sh gemma4:e2b
 ```
 
-On Linux, the script can install Ollama with its official installer. On macOS, install
-the Ollama application first from <https://ollama.com/download>.
+The Linux setup installs Ollama with its official installer when needed. The same
+`setup.sh` remains usable directly from a macOS terminal.
 
 ## Run The Desktop App
 

@@ -3,7 +3,8 @@
 
 # Explicitly declare text files you want to always be normalized and converted
 *.py text
-*.sh text
+*.sh text eol=lf
+*.command text eol=lf
 *.spec text
 
 # Denote all files that are truly binary and should not be modified
