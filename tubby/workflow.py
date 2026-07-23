@@ -34,6 +34,7 @@ def analyze_youtube_to_pdf(
     ollama_url: str = DEFAULT_OLLAMA_URL,
     report_style: str = DEFAULT_REPORT_STYLE,
     progress: ProgressCallback | None = None,
+    include_source_transcript: bool = False,
 ) -> AnalysisResult:
     _report_progress(progress, "Reading the YouTube transcript...")
     transcript = fetch_youtube_transcript(
@@ -52,6 +53,7 @@ def analyze_youtube_to_pdf(
         ollama_url=ollama_url,
         report_style=report_style,
         progress=progress,
+        include_source_transcript=include_source_transcript,
     )
 
 
@@ -64,6 +66,7 @@ def analyze_media_to_pdf(
     report_style: str = DEFAULT_REPORT_STYLE,
     whisper_model: str = DEFAULT_WHISPER_MODEL,
     progress: ProgressCallback | None = None,
+    include_source_transcript: bool = False,
 ) -> AnalysisResult:
     _report_progress(progress, "Preparing local media transcription...")
     transcript = transcribe_media_file(
@@ -83,6 +86,7 @@ def analyze_media_to_pdf(
         ollama_url=ollama_url,
         report_style=report_style,
         progress=progress,
+        include_source_transcript=include_source_transcript,
     )
 
 
@@ -94,6 +98,7 @@ def _analyze_to_pdf(
     ollama_url: str,
     report_style: str,
     progress: ProgressCallback | None,
+    include_source_transcript: bool,
 ) -> AnalysisResult:
     analysis = analyze_transcript(
         transcript,
@@ -111,6 +116,7 @@ def _analyze_to_pdf(
         model=model,
         report_style=report_style,
         progress=progress,
+        include_source_transcript=include_source_transcript,
     )
     return AnalysisResult(transcript=transcript, analysis=analysis, pdf_path=pdf_path)
 

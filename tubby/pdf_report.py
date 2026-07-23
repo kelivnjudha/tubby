@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from html import escape
 from pathlib import Path
 from typing import Callable
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import reportlab
 from reportlab.lib import colors
@@ -28,7 +29,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from tubby.local_ai import AnalysisReport
+from tubby.local_ai import AnalysisReport, ReportChapter, timestamp_seconds
 from tubby.report_styles import DEFAULT_REPORT_STYLE, get_report_style
 from tubby.transcript import VideoTranscript
 from tubby.utils import format_duration
@@ -61,6 +62,7 @@ def create_pdf_report(
     model: str,
     report_style: str = DEFAULT_REPORT_STYLE,
     progress: ProgressCallback | None = None,
+    include_source_transcript: bool = False,
 ) -> Path:
     if progress is not None:
         progress("Building the PDF report...")
@@ -110,6 +112,7 @@ def create_pdf_report(
         model=model,
         report_style=report_style,
         styles=styles,
+        include_source_transcript=include_source_transcript,
     )
 
     try:
@@ -133,6 +136,7 @@ def _build_story(
     model: str,
     report_style: str,
     styles: dict[str, ParagraphStyle],
+    include_source_transcript: bool,
 ) -> list[object]:
     edition = get_report_style(report_style)
     report_title = analysis.report_title or "Video Intelligence Report"
@@ -182,7 +186,8 @@ def _build_story(
         )
     ):
         contents.append("Reference Notes")
-    contents.append("Source Transcript")
+    if include_source_transcript:
+        contents.append("Source Transcript")
     for index, heading in enumerate(contents, start=1):
         story.append(Paragraph(f"{index:02d}  {escape(heading)}", styles["contents"]))
 
@@ -202,6 +207,9 @@ def _build_story(
 
     for chapter_number, chapter in enumerate(analysis.chapters, start=1):
         story.append(Paragraph(f"CHAPTER {chapter_number}", styles["chapter_number"]))
+        chapter_source = _chapter_source_line(transcript, chapter)
+        if chapter_source:
+            story.append(Paragraph(chapter_source, styles["chapter_source"]))
         story.append(Paragraph(escape(chapter.title), styles["chapter_title"]))
         _append_paragraphs(story, chapter.body, styles["chapter_body"])
         if chapter.key_takeaways:
@@ -234,30 +242,31 @@ def _build_story(
     _append_list_section(story, "Decisions and Actions", analysis.decisions_and_actions, styles)
     _append_list_section(story, "Questions and Caveats", analysis.questions_and_caveats, styles)
 
-    transcript_note = (
-        "This appendix contains the speech recognized locally from the selected media file. "
-        "Timestamps are estimates produced by the local speech model."
-        if transcript.source_kind == "local_media"
-        else (
-            "This appendix contains the caption text supplied to the local AI model. "
-            "Timestamps are based on the selected YouTube caption track."
-        )
-    )
-    story.extend(
-        [
-            CondPageBreak(60 * mm),
-            Paragraph("Source Transcript", styles["title"]),
-            Paragraph(transcript_note, styles["body_muted"]),
-            Spacer(1, 5 * mm),
-        ]
-    )
-    for cue in transcript.cues:
-        story.append(
-            Paragraph(
-                f'<font color="#177E78"><b>[{cue.timestamp}]</b></font> {escape(cue.text)}',
-                styles["transcript"],
+    if include_source_transcript:
+        transcript_note = (
+            "This appendix contains the speech recognized locally from the selected media file. "
+            "Timestamps are estimates produced by the local speech model."
+            if transcript.source_kind == "local_media"
+            else (
+                "This appendix contains the caption text supplied to the local AI model. "
+                "Timestamps are based on the selected YouTube caption track."
             )
         )
+        story.extend(
+            [
+                CondPageBreak(60 * mm),
+                Paragraph("Source Transcript", styles["title"]),
+                Paragraph(transcript_note, styles["body_muted"]),
+                Spacer(1, 5 * mm),
+            ]
+        )
+        for cue in transcript.cues:
+            story.append(
+                Paragraph(
+                    f'<font color="#177E78"><b>[{cue.timestamp}]</b></font> {escape(cue.text)}',
+                    styles["transcript"],
+                )
+            )
     return story
 
 
@@ -338,6 +347,55 @@ def _link_or_text(value: str) -> str:
     if value.startswith(("https://", "http://")):
         return f'<link href="{escaped}" color="#177E78">{escaped}</link>'
     return escaped
+
+
+def _chapter_source_line(
+    transcript: VideoTranscript,
+    chapter: ReportChapter,
+) -> str:
+    if not chapter.source_start or not chapter.source_end:
+        return ""
+
+    label = f"Source ({chapter.source_start} - {chapter.source_end})"
+    timestamp_url = _youtube_timestamp_url(transcript, chapter.source_start)
+    if timestamp_url:
+        return (
+            f'<link href="{escape(timestamp_url, quote=True)}" color="#177E78">'
+            f"{escape(label)}</link>"
+        )
+    return escape(label)
+
+
+def _youtube_timestamp_url(
+    transcript: VideoTranscript,
+    timestamp: str,
+) -> str | None:
+    if transcript.source_kind != "youtube":
+        return None
+
+    seconds = timestamp_seconds(timestamp)
+    if seconds is None:
+        return None
+
+    parsed = urlsplit(transcript.source_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key.casefold() not in {"start", "t"}
+    ]
+    query.append(("t", f"{seconds}s"))
+    return urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            urlencode(query),
+            parsed.fragment,
+        )
+    )
 
 
 def _build_styles(
@@ -466,6 +524,16 @@ def _build_styles(
             leading=10,
             textColor=_CORAL,
             spaceBefore=4,
+            spaceAfter=4,
+            keepWithNext=True,
+        ),
+        "chapter_source": ParagraphStyle(
+            "TubbyChapterSource",
+            parent=sample["Normal"],
+            fontName=report_fonts.regular,
+            fontSize=8.5,
+            leading=11,
+            textColor=_TEAL,
             spaceAfter=4,
             keepWithNext=True,
         ),

@@ -141,6 +141,8 @@ class LocalAiTests(unittest.TestCase):
                         "title": " Chapter One ",
                         "body": " Detailed   body. ",
                         "key_takeaways": [" Keep this "],
+                        "source_start": "[1:05]",
+                        "source_end": "0:30",
                     }
                 ],
                 "key_points": [" One ", "", "Two"],
@@ -156,6 +158,8 @@ class LocalAiTests(unittest.TestCase):
         self.assertEqual(report.introduction, "First paragraph.\n\nSecond paragraph.")
         self.assertEqual(report.chapters[0].title, "Chapter One")
         self.assertEqual(report.chapters[0].key_takeaways, ("Keep this",))
+        self.assertEqual(report.chapters[0].source_start, "0:30")
+        self.assertEqual(report.chapters[0].source_end, "1:05")
         self.assertEqual(report.key_points, ("One", "Two"))
         self.assertEqual(report.decisions_and_actions, ("Act",))
 
@@ -231,7 +235,12 @@ class LocalAiTests(unittest.TestCase):
             "questions_and_caveats": ["One caveat"],
             "chronology": ["At 0:00 the value was introduced."],
             "topic_sections": [
-                {"title": "Supported topic", "evidence": "Evidence-backed chapter body."}
+                {
+                    "title": "Supported topic",
+                    "evidence": "Evidence-backed chapter body.",
+                    "source_start": "0:00",
+                    "source_end": "0:00",
+                }
             ],
         }
         mocked_chat.side_effect = [extraction, OllamaError("invalid final JSON")]
@@ -251,6 +260,8 @@ class LocalAiTests(unittest.TestCase):
 
         self.assertEqual(report.executive_summary, "Extracted summary")
         self.assertEqual(report.chapters[0].title, "Supported topic")
+        self.assertEqual(report.chapters[0].source_start, "0:00")
+        self.assertEqual(report.chapters[0].source_end, "0:00")
         self.assertEqual(report.chapters[1].title, "Chronology")
         self.assertIn("0:00", report.chapters[1].body)
         self.assertEqual(report.important_details, ("The value is 42",))
@@ -281,6 +292,8 @@ class PdfReportTests(unittest.TestCase):
                     title="A useful chapter",
                     body="The chapter explains the source material.",
                     key_takeaways=("Keep the evidence visible.",),
+                    source_start="1:05",
+                    source_end="2:00",
                 ),
             ),
             key_points=("The first important point.",),
@@ -296,18 +309,65 @@ class PdfReportTests(unittest.TestCase):
                 output_dir=temp_dir,
                 output_language="English",
                 model="gemma4",
+                include_source_transcript=True,
             )
             reader = PdfReader(report_path)
             extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
+            link_targets: list[str] = []
+            for page in reader.pages:
+                for annotation_ref in page.get("/Annots", []):
+                    annotation = annotation_ref.get_object()
+                    action = annotation.get("/A")
+                    if action is not None and action.get("/URI"):
+                        link_targets.append(str(action["/URI"]))
             temporary_files = list(Path(temp_dir).glob(".tubby-report-*.pdf"))
 
         self.assertIn("Video Intelligence Report", extracted)
         self.assertIn("A concise evidence-based summary.", extracted)
         self.assertIn("A useful chapter", extracted)
         self.assertIn("The chapter explains the source material.", extracted)
+        self.assertIn("Source (1:05 - 2:00)", extracted)
         self.assertIn("Source Transcript", extracted)
         self.assertIn("The second source statement.", extracted)
+        self.assertTrue(any("t=65s" in target for target in link_targets))
         self.assertEqual(temporary_files, [])
+
+    def test_pdf_omits_raw_source_transcript_by_default(self) -> None:
+        transcript = VideoTranscript(
+            title="Example Video",
+            video_id="abc123",
+            source_url="https://www.youtube.com/watch?v=abc123",
+            language_code="en",
+            language_name="English",
+            is_auto_generated=False,
+            cues=(TranscriptCue(0, "Raw appendix only statement."),),
+        )
+        analysis = AnalysisReport(
+            executive_summary="Summary without the raw transcript.",
+            chapters=(
+                ReportChapter(
+                    title="Chapter",
+                    body="Crafted chapter text.",
+                    source_start="0:00",
+                    source_end="0:00",
+                ),
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            report_path = create_pdf_report(
+                transcript,
+                analysis,
+                output_dir=temp_dir,
+                output_language="English",
+                model="gemma4",
+            )
+            reader = PdfReader(report_path)
+            extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
+
+        self.assertNotIn("Source Transcript", extracted)
+        self.assertNotIn("Raw appendix only statement.", extracted)
+        self.assertIn("Source (0:00 - 0:00)", extracted)
 
     def test_pdf_rejects_unsupported_right_to_left_output(self) -> None:
         transcript = VideoTranscript(
@@ -390,6 +450,7 @@ class WorkflowTests(unittest.TestCase):
             model="gemma4:e2b",
             report_style=DEFAULT_REPORT_STYLE,
             progress=None,
+            include_source_transcript=False,
         )
         self.assertEqual(result.pdf_path, expected_path)
 
@@ -421,8 +482,10 @@ class WorkflowTests(unittest.TestCase):
         result = analyze_media_to_pdf(
             media_path="recording.mp3",
             output_dir="output",
+            model="gemma4",
             report_style="Story",
             whisper_model="medium",
+            include_source_transcript=True,
         )
 
         mocked_transcribe.assert_called_once_with(
@@ -446,6 +509,7 @@ class WorkflowTests(unittest.TestCase):
             model="gemma4",
             report_style="Story",
             progress=None,
+            include_source_transcript=True,
         )
         self.assertEqual(result.pdf_path, Path("local.pdf"))
 

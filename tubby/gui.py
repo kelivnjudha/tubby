@@ -76,6 +76,7 @@ class TubbyApp(ctk.CTk):
         self.source_label_var = ctk.StringVar(value="YouTube URL")
         self.language_var = ctk.StringVar(value="English")
         self.report_style_var = ctk.StringVar(value=DEFAULT_REPORT_STYLE)
+        self.include_source_transcript_var = ctk.BooleanVar(value=False)
         self.model_var = ctk.StringVar(value=DEFAULT_MODEL)
         self.model_status_var = ctk.StringVar(value="Loading installed Ollama models...")
         self.whisper_model_var = ctk.StringVar(value=DEFAULT_WHISPER_MODEL)
@@ -334,12 +335,31 @@ class TubbyApp(ctk.CTk):
             sticky="ew",
         )
 
+        ctk.CTkLabel(frame, text="PDF options").grid(
+            row=5, column=0, padx=(16, 12), pady=8, sticky="w"
+        )
+        self.include_source_transcript_switch = ctk.CTkSwitch(
+            frame,
+            text="Add Raw Source Transcript",
+            variable=self.include_source_transcript_var,
+            onvalue=True,
+            offvalue=False,
+        )
+        self.include_source_transcript_switch.grid(
+            row=5,
+            column=1,
+            columnspan=3,
+            padx=(0, 16),
+            pady=8,
+            sticky="w",
+        )
+
         ctk.CTkLabel(frame, text="Save folder").grid(
-            row=5, column=0, padx=(16, 12), pady=(8, 16), sticky="w"
+            row=6, column=0, padx=(16, 12), pady=(8, 16), sticky="w"
         )
         self.report_output_entry = ctk.CTkEntry(frame, textvariable=self.report_output_var)
         self.report_output_entry.grid(
-            row=5, column=1, columnspan=2, padx=(0, 8), pady=(8, 16), sticky="ew"
+            row=6, column=1, columnspan=2, padx=(0, 8), pady=(8, 16), sticky="ew"
         )
         self.report_browse_button = ctk.CTkButton(
             frame,
@@ -347,10 +367,10 @@ class TubbyApp(ctk.CTk):
             width=92,
             command=lambda: self._choose_directory(self.report_output_var),
         )
-        self.report_browse_button.grid(row=5, column=3, padx=(0, 16), pady=(8, 16), sticky="e")
+        self.report_browse_button.grid(row=6, column=3, padx=(0, 16), pady=(8, 16), sticky="e")
 
         actions = ctk.CTkFrame(frame, fg_color="transparent")
-        actions.grid(row=6, column=0, columnspan=4, padx=16, pady=(0, 16), sticky="ew")
+        actions.grid(row=7, column=0, columnspan=4, padx=16, pady=(0, 16), sticky="ew")
         self.analyze_button = ctk.CTkButton(
             actions,
             text="Create PDF",
@@ -634,6 +654,7 @@ class TubbyApp(ctk.CTk):
         model = self.model_var.get().strip()
         report_style = self.report_style_var.get().strip() or DEFAULT_REPORT_STYLE
         whisper_model = self.whisper_model_var.get().strip() or DEFAULT_WHISPER_MODEL
+        include_source_transcript = bool(self.include_source_transcript_var.get())
         output = self.report_output_var.get().strip()
 
         if not source:
@@ -682,6 +703,7 @@ class TubbyApp(ctk.CTk):
                     report_style=report_style,
                     whisper_model=whisper_model,
                     progress=self._report_progress,
+                    include_source_transcript=include_source_transcript,
                 )
             return analyze_youtube_to_pdf(
                 url=source,
@@ -690,6 +712,7 @@ class TubbyApp(ctk.CTk):
                 model=model,
                 report_style=report_style,
                 progress=self._report_progress,
+                include_source_transcript=include_source_transcript,
             )
 
         self._run_background(work, self._analysis_finished)
@@ -760,6 +783,7 @@ class TubbyApp(ctk.CTk):
             self.source_entry,
             self.language_menu,
             self.report_style_menu,
+            self.include_source_transcript_switch,
             self.model_menu,
             self.refresh_models_button,
             self.report_output_entry,

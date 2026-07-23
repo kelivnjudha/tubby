@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tubby-downloader"
-version = "0.6.0"
+version = "0.7.0"
 description = "Local media transcription and intelligence with Ollama, plus media downloading."
 readme = "README.md"
 requires-python = ">=3.10"

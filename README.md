@@ -7,7 +7,8 @@ Tubby is a local desktop media toolkit with two modes:
   extracts evidence with a selected local Ollama model, and creates a publication-style PDF.
 
 The finished PDF can be an e-book, narrative story, concise brief, or fully detailed
-reference. Every edition includes source notes and the complete timestamped transcript.
+reference. Every chapter includes a source timestamp range; the complete raw transcript is
+an optional appendix and is excluded by default.
 The `tubby` command-line downloader remains available with the same functionality.
 
 Use Tubby only with content you have the right to access and download.
@@ -27,8 +28,8 @@ The right side of the desktop mode switch supports:
 2. Local speech-to-text for common audio and video files with `faster-whisper`.
 3. Evidence extraction from long transcripts in manageable chunks.
 4. A separate local-model synthesis pass that builds coherent chapters without inventing facts.
-5. A PDF with a cover, contents, executive summary, introduction, chapters, takeaways,
-   conclusion, reference notes, and timestamped transcript appendix.
+5. A PDF with a cover, contents, executive summary, introduction, timestamped chapters,
+   takeaways, conclusion, reference notes, and an optional raw transcript appendix.
 6. An Ollama model selector populated from compatible models installed on the computer.
 
 YouTube caption retrieval requires internet access. Local media transcription and Ollama
@@ -193,6 +194,9 @@ report language, output style, models, and output folder, then select
 `Create PDF`.
 
 Reports are saved to `Downloads/Tubby Reports` by default.
+Enable `Add Raw Source Transcript` only when the PDF should include the complete caption or
+speech-recognition text. Each chapter shows its supporting source range. In YouTube reports,
+selecting that range opens the source video at the chapter's start time.
 
 ## Ollama Model Selection
 
@@ -246,8 +250,8 @@ The selected language controls:
 - Which YouTube caption track Tubby prefers
 - The language the selected Ollama model uses for the generated edition
 
-Local speech language is detected automatically. The transcript appendix remains in the
-source language, while the crafted report uses the selected report language.
+Local speech language is detected automatically. When included, the raw transcript appendix
+remains in the source language, while the crafted report uses the selected report language.
 
 ## Transcription Limitations
 
@@ -257,7 +261,8 @@ for speech-to-text. Private, age-restricted, region-restricted, or bot-protected
 may require authentication that is not currently exposed in the desktop app.
 
 Automatic captions and local speech recognition can contain transcription mistakes.
-The PDF includes the source transcript so important claims can be checked.
+Chapter source ranges support verification against the original media. Include the optional
+raw transcript appendix when line-by-line caption or speech-recognition text is also needed.
 
 ## Downloader Desktop And CLI
 
