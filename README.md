@@ -1,111 +1,146 @@
 # Tubby
 
-Tubby is a small desktop and command-line downloader for YouTube video and MP3 audio.
-The maintained app is now a single Python package backed by `yt-dlp`, with the old
-v0.1, v0.2, and Android/Kivy copies preserved under `legacy/`.
+Tubby turns a YouTube transcript into a structured PDF report using Gemma 4 through
+your local Ollama installation. The desktop app retrieves available captions, extracts
+the important information locally, and includes the full timestamped transcript in the
+finished PDF.
 
-Use Tubby only for content you have the right to download.
+The existing `tubby` command-line downloader remains available for downloading video
+and MP3 audio from URLs supported by `yt-dlp`.
+
+Use Tubby only with content you have the right to access and download.
+
+## Desktop App
+
+The desktop workflow:
+
+1. Reads manual YouTube captions or automatic captions when manual captions are absent.
+2. Prefers captions matching the selected report language, then falls back to another
+   available caption track.
+3. Analyzes long transcripts in manageable chunks with local Gemma 4.
+4. Extracts an executive summary, key points, important details, decisions, actions,
+   questions, and caveats.
+5. Creates a PDF containing the analysis, source details, and complete transcript.
+
+Transcript retrieval requires internet access. The transcript analysis is sent only to
+the Ollama API running on your computer by default.
 
 ## Requirements
 
 - Python 3.10 or newer
-- FFmpeg on `PATH` for MP3 conversion and high-resolution video downloads with sound
+- A current [Ollama](https://ollama.com/download) release
+- [Gemma 4](https://ollama.com/library/gemma4) downloaded in Ollama
+- Internet access for retrieving YouTube captions
+- FFmpeg on `PATH` only for MP3 conversion and high-resolution downloader CLI output
 
-YouTube commonly serves 1080p, 1440p, and 2160p video separately from audio. Tubby can
-merge those streams when FFmpeg is installed. Without FFmpeg, video mode is limited to
-single-file streams, which may be 720p, 480p, or lower depending on the video.
+The default `gemma4` Ollama model is approximately 9.6 GB. It supports multilingual
+analysis and a long context window, but performance depends on available RAM, GPU memory,
+and transcript length.
 
-## Install FFmpeg
-
-Tubby uses FFmpeg to merge high-resolution video with audio and to convert audio
-downloads to MP3. After installing it, restart your terminal and verify:
-
-```sh
-ffmpeg -version
-```
+## Automatic Setup
 
 ### Windows
 
-Recommended with Windows Package Manager:
+Double-click `setup.cmd`, or run it from Command Prompt:
+
+```bat
+setup.cmd
+```
+
+For setup options, run the PowerShell script directly:
 
 ```powershell
-winget install --id Gyan.FFmpeg --exact
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
-Manual install:
+The script creates `.venv`, installs Tubby, installs Ollama through `winget` when needed,
+starts the local Ollama service, and downloads `gemma4`.
 
-1. Open the official FFmpeg download page: <https://ffmpeg.org/download.html>
-2. Choose the Windows build from `gyan.dev`: <https://www.gyan.dev/ffmpeg/builds/>
-3. Download the `ffmpeg-release-essentials.zip` release build.
-4. Extract it somewhere stable, for example `C:\ffmpeg`.
-5. Add the extracted `bin` folder to your user `Path`. If you rename the extracted
-   folder so `ffmpeg.exe` is at `C:\ffmpeg\bin\ffmpeg.exe`, use:
+To skip an existing model download:
 
 ```powershell
-[Environment]::SetEnvironmentVariable(
-    "Path",
-    [Environment]::GetEnvironmentVariable("Path", "User") + ";C:\ffmpeg\bin",
-    "User"
-)
+.\setup.ps1 -SkipModelPull
 ```
 
-Open a new terminal and run `ffmpeg -version`.
+To install FFmpeg for the downloader CLI as part of setup:
 
-### macOS
+```powershell
+.\setup.ps1 -InstallFfmpeg
+```
 
-With Homebrew:
+To use another Ollama model:
+
+```powershell
+.\setup.ps1 -Model gemma4:e2b
+```
+
+### macOS And Linux
 
 ```sh
-brew install ffmpeg
-ffmpeg -version
+chmod +x setup.sh
+./setup.sh
 ```
 
-### Linux
-
-Ubuntu/Debian:
+Pass another Ollama model name as the first argument when required:
 
 ```sh
-sudo apt update
-sudo apt install ffmpeg
-ffmpeg -version
+./setup.sh gemma4:e2b
 ```
 
-Fedora:
-
-```sh
-sudo dnf install ffmpeg
-ffmpeg -version
-```
-
-Arch Linux:
-
-```sh
-sudo pacman -S ffmpeg
-ffmpeg -version
-```
-
-## Install
-
-```sh
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
+On Linux, the script can install Ollama with its official installer. On macOS, install
+the Ollama application first from <https://ollama.com/download>.
 
 ## Run The Desktop App
 
-```sh
-python -m tubby
+Windows:
+
+```powershell
+.\.venv\Scripts\python -m tubby
 ```
 
-or, after installation:
+macOS or Linux:
 
 ```sh
-tubby-gui
+./.venv/bin/python -m tubby
 ```
 
-## Run From The CLI
+Paste a YouTube URL, choose the report language and output folder, then select
+`Create PDF`. The model field defaults to `gemma4` and can be changed to any compatible
+model already installed in Ollama.
+
+Reports are saved to `Downloads/Tubby Reports` by default.
+
+## Language Support
+
+English is the default report language. The desktop app includes common language presets
+supported by both Gemma 4 and Tubby's PDF renderer.
+
+The included PDF renderer supports the listed left-to-right language presets. Right-to-left
+PDF layout is not currently included, so languages such as Arabic are not offered as presets.
+
+The selected language controls:
+
+- Which YouTube caption track Tubby prefers
+- The language Gemma 4 uses for the generated analysis
+
+The transcript appendix remains in the language supplied by YouTube. When no matching
+captions exist, Tubby analyzes an available fallback transcript and writes the findings
+in the selected report language.
+
+## Caption Limitations
+
+Tubby currently reads existing YouTube caption tracks. It does not perform speech-to-text
+on videos without captions. Private, age-restricted, region-restricted, or bot-protected
+videos may require authentication support that is not currently exposed in the desktop
+app.
+
+Automatic captions and automatically translated captions can contain transcription or
+translation mistakes. The PDF includes the source transcript so important claims can be
+checked.
+
+## Downloader CLI
+
+The command-line interface keeps its existing media download functionality.
 
 Show video information:
 
@@ -119,22 +154,44 @@ Download video:
 tubby "https://www.youtube.com/watch?v=VIDEO_ID" --mode video --quality 1080p --output Downloads
 ```
 
-For 1080p, 1440p, or 2160p with sound, install FFmpeg first. Without FFmpeg, Tubby
-will only use single-file video streams and will reject high-resolution selections
-instead of silently downloading a lower-resolution file.
-
 Download MP3 audio:
 
 ```sh
 tubby "https://www.youtube.com/watch?v=VIDEO_ID" --mode audio --audio-quality "320 kbps" --output Downloads
 ```
 
-Audio quality settings control MP3 conversion quality. They cannot restore quality that is
-not present in the original source stream.
+YouTube commonly serves 1080p, 1440p, and 2160p video separately from audio. FFmpeg is
+required to merge those streams and to convert audio to MP3. Without FFmpeg, video mode
+is limited to single-file streams and high-resolution selections are rejected.
+
+## Manual Installation
+
+```sh
+python -m venv .venv
+```
+
+Activate the environment, then install Tubby:
+
+```sh
+python -m pip install --upgrade pip
+pip install -e .
+ollama pull gemma4
+```
+
+Ollama must be running at `http://127.0.0.1:11434`. Advanced installations can override
+the defaults with:
+
+```sh
+TUBBY_OLLAMA_URL=http://127.0.0.1:11434
+TUBBY_OLLAMA_MODEL=gemma4
+```
 
 ## Validate
 
+Install test dependencies and run:
+
 ```sh
+pip install -e ".[test]"
 python -m unittest discover -s tests
 python -m compileall tubby tests
 ```
@@ -142,6 +199,6 @@ python -m compileall tubby tests
 ## Build A Desktop Executable
 
 ```sh
-pip install ".[build]"
+pip install -e ".[build]"
 pyinstaller tubby.spec
 ```

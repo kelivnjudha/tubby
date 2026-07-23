@@ -4,19 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tubby-downloader"
-version = "0.3.0"
-description = "A lightweight desktop and CLI YouTube downloader."
+version = "0.4.0"
+description = "Local YouTube transcript analysis with Gemma 4, plus a media downloader CLI."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
 authors = [{ name = "Kelvin" }]
 dependencies = [
     "customtkinter>=5.2.2",
+    "reportlab[shaping]>=5.0.0",
     "yt-dlp>=2024.12.13",
 ]
 
 [project.optional-dependencies]
 build = ["pyinstaller>=6.11"]
+test = ["pypdf>=5.4", "ruff>=0.11"]
 
 [project.scripts]
 tubby = "tubby.cli:main"
@@ -28,3 +30,4 @@ include = ["tubby*"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = ["legacy"]

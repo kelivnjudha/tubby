@@ -118,6 +118,8 @@ bin/
 
 # Local tooling
 .ruff_cache/
+output/
+tmp/
 
 # Downloaded media
 *.mp3

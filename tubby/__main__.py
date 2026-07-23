@@ -12,9 +12,9 @@ def main() -> int:
     try:
         from tubby.gui import main as gui_main
     except ModuleNotFoundError as exc:
-        if exc.name == "customtkinter":
+        if exc.name in {"customtkinter", "reportlab"}:
             print(
-                "Desktop dependencies are not installed. Run `pip install -r requirements.txt`.",
+                "Desktop dependencies are not installed. Run the Tubby setup script.",
                 file=sys.stderr,
             )
             return 1

@@ -54,9 +54,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Download YouTube video or audio with Tubby.")
-    parser.add_argument("url", nargs="?", help="YouTube URL to download")
-    parser.add_argument("-u", "--url", dest="url_option", help="YouTube URL to download")
+    parser = argparse.ArgumentParser(description="Download any video from almost every URL.")
+    parser.add_argument("url", nargs="?", help="video URL to download")
+    parser.add_argument("-u", "--url", dest="url_option", help="video URL to download")
     parser.add_argument(
         "-m",
         "--mode",
