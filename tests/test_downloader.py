@@ -57,11 +57,17 @@ class DownloaderOptionTests(unittest.TestCase):
 
     def test_build_audio_options_adds_mp3_postprocessor(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            options = build_ydl_options(Path(temp_dir), "audio")
+            ffmpeg_path = Path(temp_dir) / "ffmpeg"
+            options = build_ydl_options(
+                Path(temp_dir),
+                "audio",
+                ffmpeg_location=ffmpeg_path,
+            )
 
         self.assertEqual(options["format"], "bestaudio/best")
         self.assertEqual(options["postprocessors"][0]["preferredcodec"], "mp3")
         self.assertEqual(options["postprocessors"][0]["preferredquality"], "0")
+        self.assertEqual(options["ffmpeg_location"], str(ffmpeg_path))
 
     def test_audio_preferred_quality_accepts_bitrate(self) -> None:
         self.assertEqual(audio_preferred_quality("320 kbps"), "320K")

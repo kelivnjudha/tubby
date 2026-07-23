@@ -156,17 +156,18 @@ def download_media(
     target_dir = Path(output_dir).expanduser().resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    ffmpeg_available = has_ffmpeg()
-    if mode == "audio" and not ffmpeg_available:
+    ffmpeg_path = ffmpeg_executable()
+    ffmpeg_available = ffmpeg_path is not None
+    if mode == "audio" and ffmpeg_path is None:
         raise TubbyError(
             "FFmpeg is required to convert audio downloads to MP3. "
-            "Install FFmpeg and make sure `ffmpeg` is on PATH, or use video mode."
+            "Reinstall Tubby or install FFmpeg and make sure `ffmpeg` is on PATH."
         )
-    if mode == "video" and not ffmpeg_available and video_quality_requires_ffmpeg(quality):
+    if mode == "video" and ffmpeg_path is None and video_quality_requires_ffmpeg(quality):
         raise TubbyError(
             f"{quality} video with sound requires FFmpeg because high-resolution YouTube "
-            "video and audio are separate streams. Install FFmpeg and make sure `ffmpeg` "
-            "is on PATH, or choose 720p or lower."
+            "video and audio are separate streams. Reinstall Tubby, install FFmpeg, or choose "
+            "720p or lower."
         )
 
     options = build_ydl_options(
@@ -175,6 +176,7 @@ def download_media(
         quality,
         progress_hook,
         allow_merge=ffmpeg_available,
+        ffmpeg_location=ffmpeg_path,
     )
 
     try:
@@ -192,6 +194,7 @@ def build_ydl_options(
     quality: str = "Best",
     progress_hook: ProgressHook | None = None,
     allow_merge: bool = True,
+    ffmpeg_location: str | Path | None = None,
 ) -> dict[str, Any]:
     target_dir = Path(output_dir).expanduser()
     options: dict[str, Any] = {
@@ -208,6 +211,8 @@ def build_ydl_options(
 
     if progress_hook is not None:
         options["progress_hooks"] = [progress_hook]
+    if ffmpeg_location is not None:
+        options["ffmpeg_location"] = str(ffmpeg_location)
 
     if mode == "video":
         options["format"] = video_format_for_quality(quality, allow_merge=allow_merge)
@@ -287,7 +292,24 @@ def video_quality_requires_ffmpeg(quality: str) -> bool:
 
 
 def has_ffmpeg() -> bool:
-    return shutil.which("ffmpeg") is not None
+    return ffmpeg_executable() is not None
+
+
+def ffmpeg_executable() -> Path | None:
+    command = shutil.which("ffmpeg")
+    if command:
+        return Path(command).resolve()
+
+    try:
+        import imageio_ffmpeg
+    except (ImportError, OSError):
+        return None
+
+    try:
+        candidate = Path(imageio_ffmpeg.get_ffmpeg_exe())
+    except (OSError, RuntimeError):
+        return None
+    return candidate.resolve() if candidate.is_file() else None
 
 
 def _yt_dlp() -> Any:

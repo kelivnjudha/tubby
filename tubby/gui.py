@@ -41,6 +41,8 @@ from tubby.ollama_models import (
 )
 from tubby.pdf_report import PdfReportError
 from tubby.report_styles import DEFAULT_REPORT_STYLE, REPORT_STYLE_OPTIONS
+from tubby.runtime_setup import RuntimeStatus, SetupResult, inspect_runtime
+from tubby.setup_dialog import SetupDialog
 from tubby.transcript import TranscriptError
 from tubby.utils import format_download_status
 from tubby.workflow import AnalysisResult, analyze_media_to_pdf, analyze_youtube_to_pdf
@@ -115,6 +117,8 @@ class TubbyApp(ctk.CTk):
         self._model_labels_by_name: dict[str, str] = {}
         self._model_refreshing = False
         self._selected_model_installed = False
+        self._setup_dialog: SetupDialog | None = None
+        self._setup_prompted = False
         self._mode_info = {
             DOWNLOADER_MODE: "Ready for a media URL.",
             INTELLIGENCE_MODE: "Ready for a YouTube link or local media file.",
@@ -128,6 +132,7 @@ class TubbyApp(ctk.CTk):
         self._build_activity_area()
         self._switch_mode(INTELLIGENCE_MODE)
         self.after(150, self._refresh_ollama_models)
+        self.after(450, self._check_runtime_setup)
 
     def _apply_window_icon(self) -> None:
         icon_path = _app_icon_path()
@@ -164,6 +169,13 @@ class TubbyApp(ctk.CTk):
             width=440,
         )
         self.mode_switch.grid(row=0, column=1, rowspan=2, padx=(20, 0), sticky="e")
+        self.setup_button = ctk.CTkButton(
+            header,
+            text="Setup",
+            width=72,
+            command=self._open_setup,
+        )
+        self.setup_button.grid(row=0, column=2, rowspan=2, padx=(8, 0), sticky="e")
 
     def _build_content(self) -> None:
         self.content_host = ctk.CTkFrame(self, fg_color="transparent")
@@ -513,6 +525,44 @@ class TubbyApp(ctk.CTk):
 
         threading.Thread(target=runner, daemon=True).start()
 
+    def _check_runtime_setup(self) -> None:
+        packaged_app = bool(getattr(sys, "frozen", False))
+        auto_setup = os.environ.get("TUBBY_AUTO_SETUP", "").strip() == "1"
+        if self._setup_prompted or not (packaged_app or auto_setup):
+            return
+
+        def runner() -> None:
+            status = inspect_runtime(self.whisper_model_var.get())
+            self.after(0, lambda: self._runtime_setup_checked(status))
+
+        threading.Thread(target=runner, daemon=True).start()
+
+    def _runtime_setup_checked(self, status: RuntimeStatus) -> None:
+        if status.needs_setup and not self._setup_prompted:
+            self._open_setup()
+
+    def _open_setup(self) -> None:
+        if self._busy:
+            messagebox.showinfo("Tubby", "Wait for the current task to finish before setup.")
+            return
+        if self._setup_dialog is not None and self._setup_dialog.winfo_exists():
+            self._setup_dialog.lift()
+            self._setup_dialog.focus_force()
+            return
+        self._setup_prompted = True
+        self._setup_dialog = SetupDialog(
+            self,
+            self._setup_finished,
+            preferred_model=self.model_var.get(),
+            speech_model=self.whisper_model_var.get(),
+        )
+
+    def _setup_finished(self, result: SetupResult) -> None:
+        self.model_var.set(result.selected_model)
+        self.whisper_model_var.set(result.status.whisper_model)
+        self._set_info_text("Local components are ready. Tubby can now create PDF reports.")
+        self._refresh_ollama_models()
+
     def _models_loaded(self, models: tuple[OllamaModel, ...]) -> None:
         self._model_refreshing = False
         report_models = ordered_report_models(models)
@@ -845,6 +895,7 @@ class TubbyApp(ctk.CTk):
         state = "disabled" if busy else "normal"
         widgets = (
             self.mode_switch,
+            self.setup_button,
             self.download_url_entry,
             self.download_format_switch,
             self.download_quality_menu,

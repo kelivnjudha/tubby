@@ -3,21 +3,25 @@
 import os
 import sys
 
+from PyInstaller.utils.hooks import collect_data_files
+
 from tubby import __version__
 
 
 APP_ICON = 'public/logo/tubby_logo.png'
 MACOS_ENTITLEMENTS = 'packaging/macos/entitlements.plist'
 codesign_identity = os.environ.get('TUBBY_CODESIGN_IDENTITY') or None
+ffmpeg_datas = collect_data_files('imageio_ffmpeg', includes=['binaries/*'])
 
 a = Analysis(
     ['tubby/gui.py'],
     pathex=[],
     binaries=[],
-    datas=[(APP_ICON, 'public/logo')],
+    datas=[(APP_ICON, 'public/logo'), *ffmpeg_datas],
     hiddenimports=[
         'yt_dlp',
         'faster_whisper',
+        'imageio_ffmpeg',
         'ctranslate2',
         'av',
         'reportlab.pdfbase._fontdata',

@@ -31,7 +31,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0.17763
+MinVersion=10.0.19045
 OutputDir={#OutputDir}
 OutputBaseFilename=Tubby-{#AppVersion}-Windows-x64-Setup
 SetupIconFile={#SetupIcon}
@@ -62,4 +62,4 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} and prepare local AI"; Flags: nowait postinstall skipifsilent

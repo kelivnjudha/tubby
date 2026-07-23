@@ -11,8 +11,14 @@ installer, and `hdiutil` for macOS disk images.
 - `SHA256SUMS.txt`
 
 The GitHub Actions workflow can be run manually to build downloadable artifacts without
-creating a release. A matching version tag, such as `v0.9.0`, publishes the artifacts as a
+creating a release. A matching version tag, such as `v0.10.0`, publishes the artifacts as a
 GitHub release.
+
+The packaged app includes a bundled FFmpeg executable through `imageio-ffmpeg`. After
+installation, Tubby's first-run assistant installs Ollama from its official distribution
+when needed, starts the service, and downloads the report and speech models selected by the
+user. Multi-gigabyte model files remain on-demand downloads and are not duplicated inside
+each installer.
 
 ## Windows Local Build
 

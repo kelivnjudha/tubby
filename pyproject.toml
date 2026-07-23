@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tubby-downloader"
-version = "0.9.0"
+version = "0.10.0"
 description = "Local media transcription and intelligence with Ollama, plus media downloading."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,6 +13,7 @@ authors = [{ name = "Kelvin" }]
 dependencies = [
     "customtkinter>=5.2.2",
     "faster-whisper>=1.2.1,<2",
+    "imageio-ffmpeg>=0.6,<1",
     "reportlab[shaping]>=5.0.0",
     "yt-dlp>=2024.12.13",
 ]

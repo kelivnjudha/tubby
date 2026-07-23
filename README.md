@@ -42,12 +42,14 @@ analysis run on your computer after their models have been downloaded.
 
 ## Requirements
 
-- Python 3.10 or newer
-- A current [Ollama](https://ollama.com/download) release
-- One compatible local Ollama text-generation model; setup offers several compact options
-- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) and a local Whisper model
-- Internet access for setup, model downloads, and retrieving YouTube captions
-- FFmpeg on `PATH` only for MP3 conversion and high-resolution downloader CLI output
+- Windows 10 22H2/Windows 11 x64, or macOS 14 Sonoma or newer
+- Internet access for first-run setup, model downloads, URL downloads, and YouTube captions
+- Enough free storage for the selected report and speech models
+
+Release installers include Python, Tubby's application dependencies, local transcription
+support, and FFmpeg. Source checkouts additionally require Python 3.10 or newer. Ollama and
+AI model data are prepared by Tubby's first-run assistant rather than embedded in every
+installer.
 
 macOS users need macOS 14 Sonoma or newer because that is the minimum version supported
 by the current Ollama release. Both Apple silicon and Intel Macs are supported; Ollama
@@ -63,15 +65,17 @@ Linux behavior.
 
 ## Install A Release
 
-GitHub releases provide self-contained desktop installers. They include Tubby, Python, and
-its application dependencies; Python does not need to be installed separately.
+GitHub releases provide self-contained desktop installers. They include Tubby, Python, its
+application dependencies, and a bundled FFmpeg binary; Python and FFmpeg do not need to be
+installed separately.
 
 ### Windows Release
 
 Download `Tubby-VERSION-Windows-x64-Setup.exe` from the
 [latest release](https://github.com/kelivnjudha/tubby/releases/latest). The per-user installer
 adds Tubby to the Start Menu, offers an optional desktop shortcut, and includes an uninstaller.
-The x64 build supports x64 Windows 10/11 and Windows 11 on Arm through x64 emulation.
+The x64 build supports x64 Windows 10 22H2/Windows 11 and Windows 11 on Arm through x64
+emulation.
 
 ### macOS Release
 
@@ -85,20 +89,30 @@ When a release is not signed and notarized, macOS may require Control-clicking T
 selecting `Open`, and confirming once. See [Release Signing](#release-signing) for producing
 notarized builds.
 
-The installers do not bundle Ollama, multi-gigabyte AI models, or FFmpeg. The downloader
-works without Ollama. FFmpeg is still required for MP3 conversion and high-resolution video
-with merged audio. Before creating transcript reports, install
-[Ollama](https://ollama.com/download), start it, and install a report model:
+### First Launch
 
-```sh
-ollama pull qwen3:4b
-```
+The installer launches Tubby, and Tubby opens `Prepare Tubby` when a required local AI
+component is missing. Choose the report model and speech model, then select
+`Install & Prepare`. Tubby will:
 
-The selected local Whisper speech model downloads on the first local audio or video
-transcription. Source checkouts can use the automatic setup scripts below to download these
-models in advance.
+1. Install Ollama from Ollama's official download service when it is not already installed.
+2. Start the local Ollama service.
+3. Reuse a compatible installed report model or download the selected model.
+4. Download the selected faster-whisper speech model.
+5. Save the model choice and refresh the desktop model selector.
+
+Windows uses Ollama's official per-user installer. On macOS, Tubby verifies the downloaded
+Ollama app signature and installs it in `/Applications`, or `~/Applications` when the system
+folder is not writable. Existing Ollama installations and compatible models are reused.
+
+The model downloads are intentionally not embedded in the installer: the available options
+range from about 1.4 GB to 3.3 GB and users can choose one that fits their computer. Setup
+therefore needs internet access once. The downloader is usable immediately and does not
+depend on Ollama. The `Setup` button in the desktop header can reopen the assistant later.
 
 ## Automatic Setup
+
+The following scripts provide the equivalent environment setup for a source checkout.
 
 ### Windows
 
@@ -129,12 +143,6 @@ To skip the speech-model download:
 
 ```powershell
 .\setup.ps1 -SkipSpeechModelDownload
-```
-
-To install FFmpeg for the downloader CLI as part of setup:
-
-```powershell
-.\setup.ps1 -InstallFfmpeg
 ```
 
 To explicitly select another Ollama model and bypass the interactive choice:
@@ -422,7 +430,7 @@ The `Build release installers` GitHub Actions workflow runs the full tests and b
 - `SHA256SUMS.txt` for tagged releases
 
 Run the workflow manually to test release artifacts. Pushing a version tag that matches
-`pyproject.toml`, such as `v0.9.0`, builds the installers and publishes a GitHub release.
+`pyproject.toml`, such as `v0.10.0`, builds the installers and publishes a GitHub release.
 Packaging implementation and local build commands are documented in
 [`packaging/README.md`](packaging/README.md).
 

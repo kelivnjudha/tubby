@@ -93,12 +93,18 @@ def transcribe_media_file(
 
 def download_transcription_model(model_size: str = DEFAULT_WHISPER_MODEL) -> None:
     selected_model = model_size.strip() or DEFAULT_WHISPER_MODEL
-    WhisperModel = _whisper_model_class()
-    WhisperModel(
-        selected_model,
-        device=os.environ.get("TUBBY_WHISPER_DEVICE", "cpu"),
-        compute_type=os.environ.get("TUBBY_WHISPER_COMPUTE_TYPE", "int8"),
-    )
+    download_model = _whisper_download_model()
+    download_model(selected_model)
+
+
+def transcription_model_is_downloaded(model_size: str = DEFAULT_WHISPER_MODEL) -> bool:
+    selected_model = model_size.strip() or DEFAULT_WHISPER_MODEL
+    try:
+        download_model = _whisper_download_model()
+        download_model(selected_model, local_files_only=True)
+    except Exception:
+        return False
+    return True
 
 
 def _consume_segments(
@@ -156,3 +162,13 @@ def _whisper_model_class() -> Any:
             "Local media transcription is not installed. Run the Tubby setup script again."
         ) from exc
     return WhisperModel
+
+
+def _whisper_download_model() -> Any:
+    try:
+        from faster_whisper.utils import download_model
+    except ModuleNotFoundError as exc:
+        raise TranscriptError(
+            "Local media transcription is not installed. Run the Tubby setup script again."
+        ) from exc
+    return download_model
