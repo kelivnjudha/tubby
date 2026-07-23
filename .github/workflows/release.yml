@@ -301,6 +301,7 @@ jobs:
         run: >
           gh release create "$GITHUB_REF_NAME"
           release-assets/*
+          --repo "$GITHUB_REPOSITORY"
           --verify-tag
           --generate-notes
           --title "Tubby $GITHUB_REF_NAME"
