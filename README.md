@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo/tubby_logo_for_github_readme.png" alt="Tubby" width="680">
+</p>
+
 # Tubby
 
 Tubby is a local desktop media toolkit with two modes:

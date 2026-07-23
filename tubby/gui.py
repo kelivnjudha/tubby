@@ -5,7 +5,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import PhotoImage, TclError, filedialog, messagebox
 from typing import Callable, TypeVar
 
 import customtkinter as ctk
@@ -53,6 +53,21 @@ YOUTUBE_SOURCE = "YouTube link"
 MEDIA_SOURCE = "Media file"
 VIDEO_MODE = "Video"
 AUDIO_MODE = "MP3 audio"
+APP_ICON_NAME = "tubby_logo.png"
+
+
+def _app_icon_path() -> Path | None:
+    candidates: list[Path] = []
+    bundle_root = getattr(sys, "_MEIPASS", "")
+    if bundle_root:
+        candidates.append(Path(bundle_root) / "public" / "logo" / APP_ICON_NAME)
+    candidates.extend(
+        (
+            Path(__file__).resolve().parent.parent / "public" / "logo" / APP_ICON_NAME,
+            Path(sys.prefix) / "share" / "tubby" / "logo" / APP_ICON_NAME,
+        )
+    )
+    return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
 class TubbyApp(ctk.CTk):
@@ -62,6 +77,10 @@ class TubbyApp(ctk.CTk):
         self.title(f"Tubby {__version__}")
         self.geometry("960x760")
         self.minsize(820, 680)
+        self._window_icon: PhotoImage | None = None
+        self._apply_window_icon()
+        if sys.platform == "win32":
+            self.after(250, self._apply_window_icon)
 
         self.mode_var = ctk.StringVar(value=INTELLIGENCE_MODE)
         self.subtitle_var = ctk.StringVar(value="Local transcript intelligence")
@@ -109,6 +128,16 @@ class TubbyApp(ctk.CTk):
         self._build_activity_area()
         self._switch_mode(INTELLIGENCE_MODE)
         self.after(150, self._refresh_ollama_models)
+
+    def _apply_window_icon(self) -> None:
+        icon_path = _app_icon_path()
+        if icon_path is None:
+            return
+        try:
+            self._window_icon = PhotoImage(master=self, file=str(icon_path))
+            self.iconphoto(True, self._window_icon)
+        except (OSError, TclError):
+            self._window_icon = None
 
     def _build_header(self) -> None:
         header = ctk.CTkFrame(self, fg_color="transparent")

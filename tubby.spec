@@ -5,7 +5,7 @@ a = Analysis(
     ['tubby/gui.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('public/logo/tubby_logo.png', 'public/logo')],
     hiddenimports=[
         'yt_dlp',
         'faster_whisper',
@@ -42,4 +42,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='public/logo/tubby_logo.png',
 )
